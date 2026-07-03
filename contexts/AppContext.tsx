@@ -1,6 +1,7 @@
 // Placeholder Context component file
 // This file is intentionally left blank for now.
 import { createContext, ReactNode, useContext, useState } from "react";
+import { Text, TextInput, TouchableOpacity, View } from "react-native";
 
 /* ── Design Tokens ───────────────────────────────────────────── */
 export const T = {
@@ -8,22 +9,22 @@ export const T = {
   primary: "#FF7043", // Playful Orange - MAIN COLOR
   primaryLight: "#FFE8E3", // Light orange background
   primaryDark: "#D84315", // Dark orange for text
-  
+
   secondary: "#FFB84D", // Warm Yellow - cheerful and welcoming
   secondaryLight: "#FFF3E0", // Light yellow background
   secondaryDark: "#E69500", // Dark yellow
-  
+
   accent: "#4A90E2", // Soft Blue - calm and trustworthy
   accentLight: "#E3F2FD", // Light blue background
   accentDark: "#2E5C8A", // Dark blue
-  
+
   // Additional Colors
   mintGreen: "#66D9B8", // Mint Green - fresh and nature-associated
   mintGreenLight: "#E8F8F4", // Light mint background
   mintGreenDark: "#3DAA87", // Dark mint
-  
+
   vibrantBlue: "#2196F3", // Vibrant Blue - engaging nod to canine vision
-  
+
   // Neutrals
   dark: "#2C2C2A", // Dark text
   medium: "#888780", // Secondary text
@@ -31,7 +32,7 @@ export const T = {
   bg: "#F5F5F5", // Neutral white/light gray background
   white: "#FFFFFF",
   border: "#E0E0E0",
-  
+
   // Legacy aliases (for backward compatibility)
   teal: "#FF7043", // Now orange (was blue)
   tealLight: "#FFE8E3", // Light orange
@@ -40,7 +41,7 @@ export const T = {
   amberLight: "#FFF3E0",
   coral: "#FF7043", // Orange
   coralLight: "#FFE8E3",
-  
+
   // Shadows
   shadow: "0 2px 8px rgba(0,0,0,0.08)",
   shadowMd: "0 4px 16px rgba(0,0,0,0.10)",
@@ -61,6 +62,7 @@ export type Screen =
   | "filter"
   | "match-profile"
   | "send-request"
+  | "conversation"
   | "request-received"
   | "dog-profile"
   | "owner-profile"
@@ -318,7 +320,6 @@ export function Btn({
   disabled?: boolean;
   sm?: boolean;
 }) {
-  const { TouchableOpacity, Text } = require("react-native");
   const styles: Record<string, any> = {
     primary: { backgroundColor: T.teal },
     secondary: {
@@ -352,7 +353,11 @@ export function Btn({
           fontSize: sm ? 12 : 14,
           fontWeight: "700",
           color:
-            variant === "primary" || variant === "danger" ? "#fff" : variant === "secondary" ? T.teal : T.dark,
+            variant === "primary" || variant === "danger"
+              ? "#fff"
+              : variant === "secondary"
+                ? T.teal
+                : T.dark,
           fontFamily: FONT,
         }}
       >
@@ -373,7 +378,6 @@ export function Field({
   type?: string;
   value?: string;
 }) {
-  const { View, Text, TextInput } = require("react-native");
   return (
     <View
       style={{
@@ -414,7 +418,6 @@ export function Chip({
   active?: boolean;
   onPress?: () => void;
 }) {
-  const { TouchableOpacity, Text } = require("react-native");
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -448,8 +451,6 @@ export function VeriBadge({
   verified?: boolean;
   tier?: number;
 }) {
-  const { View, Text } = require("react-native");
-  
   if (tier === 3)
     return (
       <View
@@ -518,11 +519,24 @@ export function VeriBadge({
 }
 
 export function ScoreBar({ score }: { score: number }) {
-  const { View, Text } = require("react-native");
   return (
     <View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <Text style={{ fontSize: 12, fontWeight: "700", color: T.teal, fontFamily: FONT }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 4,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 12,
+            fontWeight: "700",
+            color: T.teal,
+            fontFamily: FONT,
+          }}
+        >
           {score}% Compatible
         </Text>
       </View>
@@ -558,7 +572,6 @@ export function TopBar({
   rightEmoji?: string;
   onRight?: () => void;
 }) {
-  const { View, Text, TouchableOpacity } = require("react-native");
   return (
     <View
       style={{
@@ -609,4 +622,3 @@ export function TopBar({
     </View>
   );
 }
-

@@ -1,6 +1,29 @@
-import { ArrowLeft, Award, Camera, CheckCircle, Clock, Dna, FileCheck, FolderOpen, RotateCcw, Search, Shield, Star, Stethoscope, Syringe, Upload, XCircle } from "lucide-react-native";
+import {
+    ArrowLeft,
+    Award,
+    Camera,
+    CheckCircle,
+    Clock,
+    Dna,
+    FileCheck,
+    FolderOpen,
+    RotateCcw,
+    Search,
+    Shield,
+    Star,
+    Stethoscope,
+    Syringe,
+    Upload,
+    XCircle,
+} from "lucide-react-native";
 import { useState } from "react";
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
 import { FONT, MOCK_VERIFIERS, T, useV3 } from "../contexts/AppContext";
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
@@ -110,7 +133,14 @@ export function VerifyUpload() {
         <TouchableOpacity onPress={goBack}>
           <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+          }}
+        >
           <Shield size={18} color={T.dark} strokeWidth={1.5} />
           <Text
             style={{
@@ -132,7 +162,7 @@ export function VerifyUpload() {
           paddingHorizontal: 20,
           paddingVertical: 20,
           gap: 20,
-          paddingBottom: 120,
+          paddingBottom: 32,
         }}
       >
         <Text style={{ fontSize: 14, color: T.medium }}>
@@ -161,11 +191,11 @@ export function VerifyUpload() {
               marginBottom: 8,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
               <Award size={16} color={T.dark} strokeWidth={1.5} />
-              <Text
-                style={{ fontSize: 14, fontWeight: "700", color: T.dark }}
-              >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
                 Trust Score Preview
               </Text>
             </View>
@@ -271,7 +301,12 @@ export function VerifyUpload() {
                   )}
                 </View>
                 {uploaded[i] ? (
-                  <CheckCircle size={20} color={T.teal} fill={T.tealLight} strokeWidth={2} />
+                  <CheckCircle
+                    size={20}
+                    color={T.teal}
+                    fill={T.tealLight}
+                    strokeWidth={2}
+                  />
                 ) : selected === i ? (
                   <View
                     style={{
@@ -323,11 +358,25 @@ export function VerifyUpload() {
             backgroundColor: T.tealLight,
           }}
         >
-          <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: T.white, alignItems: "center", justifyContent: "center" }}>
+          <View
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: T.white,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             <Upload size={28} color={T.teal} strokeWidth={1.5} />
           </View>
           <Text
-            style={{ fontSize: 14, fontWeight: "600", color: T.teal, textAlign: "center" }}
+            style={{
+              fontSize: 14,
+              fontWeight: "600",
+              color: T.teal,
+              textAlign: "center",
+            }}
           >
             Tap to upload or take a photo
           </Text>
@@ -344,7 +393,7 @@ export function VerifyUpload() {
                 backgroundColor: T.teal,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6
+                gap: 6,
               }}
             >
               <Camera size={14} color="#fff" strokeWidth={2} />
@@ -369,7 +418,7 @@ export function VerifyUpload() {
                 borderColor: T.teal,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6
+                gap: 6,
               }}
             >
               <FolderOpen size={14} color={T.teal} strokeWidth={2} />
@@ -385,22 +434,7 @@ export function VerifyUpload() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Bottom button */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 80,
-          left: 0,
-          right: 0,
-          paddingHorizontal: 20,
-          paddingVertical: 12,
-          backgroundColor: T.white,
-          borderTopWidth: 1,
-          borderTopColor: T.border,
-        }}
-      >
         <TouchableOpacity
           onPress={() => navigate("verify-choose")}
           style={{
@@ -422,7 +456,7 @@ export function VerifyUpload() {
             Next →
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -456,7 +490,14 @@ export function VerifyChoose() {
         <TouchableOpacity onPress={goBack}>
           <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+          }}
+        >
           <Shield size={18} color={T.dark} strokeWidth={1.5} />
           <Text
             style={{
@@ -493,7 +534,7 @@ export function VerifyChoose() {
           paddingHorizontal: 20,
           paddingVertical: 20,
           gap: 16,
-          paddingBottom: 120,
+          paddingBottom: 32,
         }}
       >
         <Text style={{ fontSize: 14, color: T.medium }}>
@@ -566,23 +607,33 @@ export function VerifyChoose() {
               </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text
-                style={{ fontSize: 14, fontWeight: "700", color: T.dark }}
-              >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
                 {v.name}
               </Text>
-              <Text style={{ fontSize: 12, color: T.medium }}>
-                {v.role}
-              </Text>
-              <Text style={{ fontSize: 12, color: T.medium }}>
-                {v.clinic}
-              </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Star size={12} color="#f59e0b" fill="#f59e0b" strokeWidth={1.5} />
+              <Text style={{ fontSize: 12, color: T.medium }}>{v.role}</Text>
+              <Text style={{ fontSize: 12, color: T.medium }}>{v.clinic}</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 4,
+                }}
+              >
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  <Star
+                    size={12}
+                    color="#f59e0b"
+                    fill="#f59e0b"
+                    strokeWidth={1.5}
+                  />
                   <Text style={{ fontSize: 12 }}>{v.rating}</Text>
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
                   <View
                     style={{
                       width: 8,
@@ -607,7 +658,7 @@ export function VerifyChoose() {
                 borderColor: T.teal,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6
+                gap: 6,
               }}
             >
               {selected === v.id ? (
@@ -637,22 +688,7 @@ export function VerifyChoose() {
             </TouchableOpacity>
           </TouchableOpacity>
         ))}
-      </ScrollView>
 
-      {/* Bottom button */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 80,
-          left: 0,
-          right: 0,
-          paddingHorizontal: 20,
-          paddingVertical: 12,
-          backgroundColor: T.white,
-          borderTopWidth: 1,
-          borderTopColor: T.border,
-        }}
-      >
         <TouchableOpacity
           onPress={() => navigate("verify-status")}
           disabled={!selected}
@@ -662,6 +698,7 @@ export function VerifyChoose() {
             borderRadius: 12,
             backgroundColor: selected ? T.teal : T.light,
             alignItems: "center",
+            marginTop: 8,
           }}
         >
           <Text
@@ -675,7 +712,7 @@ export function VerifyChoose() {
             Send for Review →
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -692,8 +729,18 @@ export function VerifyStatus() {
       color: T.amber,
       bg: T.amberLight,
     },
-    verified: { Icon: CheckCircle, label: "Verified!", color: T.teal, bg: T.tealLight },
-    rejected: { Icon: XCircle, label: "Rejected", color: T.coral, bg: T.coralLight },
+    verified: {
+      Icon: CheckCircle,
+      label: "Verified!",
+      color: T.teal,
+      bg: T.tealLight,
+    },
+    rejected: {
+      Icon: XCircle,
+      label: "Rejected",
+      color: T.coral,
+      bg: T.coralLight,
+    },
   };
   const s = statusMap[docStatus];
 
@@ -716,7 +763,14 @@ export function VerifyStatus() {
         <TouchableOpacity onPress={goBack}>
           <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
         </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+          }}
+        >
           <Shield size={18} color={T.dark} strokeWidth={1.5} />
           <Text
             style={{
@@ -763,7 +817,9 @@ export function VerifyStatus() {
             }}
           >
             <View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
                 <Syringe size={16} color={T.dark} strokeWidth={1.5} />
                 <Text
                   style={{
@@ -785,9 +841,7 @@ export function VerifyStatus() {
                 backgroundColor: s.bg,
               }}
             >
-              <Text
-                style={{ fontSize: 14, fontWeight: "700", color: s.color }}
-              >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: s.color }}>
                 {s.e} {s.label}
               </Text>
             </View>
@@ -807,9 +861,7 @@ export function VerifyStatus() {
               }}
             >
               <Text style={{ fontSize: 14, color: T.medium }}>{k}</Text>
-              <Text
-                style={{ fontSize: 14, fontWeight: "600", color: T.dark }}
-              >
+              <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark }}>
                 {v}
               </Text>
             </View>
@@ -819,7 +871,16 @@ export function VerifyStatus() {
         {/* Verified result */}
         {docStatus === "verified" && (
           <View style={{ alignItems: "center", gap: 16, paddingVertical: 16 }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: T.tealLight, alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: T.tealLight,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <CheckCircle size={48} color={T.teal} strokeWidth={1.5} />
             </View>
             <Text
@@ -841,7 +902,7 @@ export function VerifyStatus() {
                 backgroundColor: T.amberLight,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6
+                gap: 6,
               }}
             >
               <Award size={16} color="#8a5a00" strokeWidth={1.5} />
@@ -869,7 +930,16 @@ export function VerifyStatus() {
         {/* Rejected result */}
         {docStatus === "rejected" && (
           <View style={{ alignItems: "center", gap: 16, paddingVertical: 16 }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: T.coralLight, alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: T.coralLight,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <XCircle size={48} color={T.coral} strokeWidth={1.5} />
             </View>
             <View
@@ -912,7 +982,7 @@ export function VerifyStatus() {
                 alignItems: "center",
                 flexDirection: "row",
                 justifyContent: "center",
-                gap: 6
+                gap: 6,
               }}
             >
               <RotateCcw size={16} color="#fff" strokeWidth={2} />
@@ -933,12 +1003,19 @@ export function VerifyStatus() {
         {/* Pending */}
         {docStatus === "pending" && (
           <View style={{ alignItems: "center", gap: 16, paddingVertical: 32 }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: T.amberLight, alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: T.amberLight,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <Clock size={48} color="#a06000" strokeWidth={1.5} />
             </View>
-            <Text
-              style={{ fontSize: 20, fontWeight: "700", color: T.dark }}
-            >
+            <Text style={{ fontSize: 20, fontWeight: "700", color: T.dark }}>
               Under Review
             </Text>
             <Text
@@ -964,7 +1041,7 @@ export function VerifyStatus() {
             alignItems: "center",
             flexDirection: "row",
             justifyContent: "center",
-            gap: 6
+            gap: 6,
           }}
         >
           <ArrowLeft size={16} color="#fff" strokeWidth={2} />
