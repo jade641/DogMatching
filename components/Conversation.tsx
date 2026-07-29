@@ -1,22 +1,22 @@
 import {
-    ArrowLeft,
-    Clock3,
-    HeartHandshake,
-    MapPin,
-    MessageCircle,
-    PawPrint,
-    Send,
-    ShieldCheck,
-    Sparkles
+  ArrowLeft,
+  Clock3,
+  HeartHandshake,
+  MapPin,
+  MessageCircle,
+  PawPrint,
+  Send,
+  ShieldCheck,
+  Sparkles
 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
-    Image,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Image,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { FONT, MOCK_DOGS, T, useV3 } from "../contexts/AppContext";
 
@@ -78,12 +78,12 @@ export function ConversationScreen() {
   const [draft, setDraft] = useState("");
 
   const owner = useMemo(() => {
-    const [city] = dog.ownerLocation.split(",");
+    const [city] = dog.owner.location.split(",");
     return {
-      name: dog.ownerName,
+      name: dog.owner.name,
       location: city,
-      initials: dog.ownerAvatar,
-      verified: dog.verified,
+      initials: dog.owner.name.charAt(0),
+      verified: dog.owner.verificationStatus === 'verified',
     };
   }, [dog]);
 
@@ -225,7 +225,7 @@ export function ConversationScreen() {
             }}
           >
             <Image
-              source={{ uri: dog.img }}
+              source={{ uri: dog.images?.[0] }}
               style={{
                 width: 58,
                 height: 58,

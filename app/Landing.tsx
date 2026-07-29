@@ -27,7 +27,7 @@ const landingPages = [
   },
   {
     icon: Users,
-    title: "Connect with Confidence",
+    title: "Match with Confidence",
     description:
       "Reputation pages, badges, and interaction history so you always know who you're dealing with.",
   },
@@ -69,8 +69,8 @@ export default function Landing({ onLaunch }: { onLaunch: () => void }) {
       <View style={styles.content}>
         {/* Icon Box */}
         <View style={styles.iconBox}>
-          <IconComponent 
-            size={80} 
+          <IconComponent
+            size={80}
             color={T.primary}
             strokeWidth={1.5}
           />

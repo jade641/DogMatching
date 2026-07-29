@@ -1,42 +1,66 @@
 import {
-    ArrowLeft,
-    Award,
-    Bell,
-    Calendar,
-    Camera,
-    CheckCircle,
-    Clock,
-    Dna,
-    Edit,
-    FileCheck,
-    FileText,
-    LogOut,
-    MapPin,
-    MessageSquare,
-    PawPrint,
-    Plus,
-    Send,
-    Settings,
-    Star,
-    Stethoscope,
-    Syringe,
-    User,
+  ArrowLeft,
+  Award,
+  Bell,
+  Calendar,
+  Camera,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Dna,
+  Edit,
+  FileCheck,
+  FileText,
+  LogOut,
+  MapPin,
+  MessageSquare,
+  PawPrint,
+  Plus,
+  Send,
+  Settings,
+  Star,
+  Stethoscope,
+  Syringe,
+  User
 } from "lucide-react-native";
 import { useState } from "react";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
-    FONT,
-    IMGS,
-    MOCK_DOGS,
-    T,
-    useV3,
-    VeriBadge,
+  FONT,
+  MOCK_DOGS,
+  T,
+  useV3,
+  VeriBadge
 } from "../contexts/AppContext";
 
 /* ── Dog Profile (My Dog) ────────────────────────────────────── */
 export function DogProfile() {
-  const { navigate, goBack } = useV3();
+  const { navigate, goBack, selectedDog, setSelectedDog } = useV3();
   const [tab, setTab] = useState<"info" | "health" | "gallery">("info");
+
+  // Get current dog index
+  const currentDogIndex = selectedDog ? MOCK_DOGS.findIndex(d => d.id === selectedDog.id) : 0;
+  const [activeDogIndex, setActiveDogIndex] = useState(currentDogIndex >= 0 ? currentDogIndex : 0);
+
+  // Use the active dog based on current index
+  const dog = MOCK_DOGS[activeDogIndex] || MOCK_DOGS[0];
+
+  const goToNextDog = () => {
+    if (activeDogIndex < MOCK_DOGS.length - 1) {
+      const newIndex = activeDogIndex + 1;
+      setActiveDogIndex(newIndex);
+      setSelectedDog(MOCK_DOGS[newIndex]);
+    }
+  };
+
+  const goToPreviousDog = () => {
+    if (activeDogIndex > 0) {
+      const newIndex = activeDogIndex - 1;
+      setActiveDogIndex(newIndex);
+      setSelectedDog(MOCK_DOGS[newIndex]);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -57,20 +81,64 @@ export function DogProfile() {
         <TouchableOpacity onPress={goBack}>
           <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
         </TouchableOpacity>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "700",
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        >
-          My Dog's Profile
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <TouchableOpacity
+            onPress={goToPreviousDog}
+            disabled={activeDogIndex === 0}
+            style={{ opacity: activeDogIndex === 0 ? 0.3 : 1 }}
+          >
+            <ChevronLeft size={20} color={T.dark} strokeWidth={1.5} />
+          </TouchableOpacity>
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "700",
+              color: T.dark,
+              fontFamily: FONT,
+            }}
+          >
+            {dog.name}'s Profile
+          </Text>
+          <TouchableOpacity
+            onPress={goToNextDog}
+            disabled={activeDogIndex === MOCK_DOGS.length - 1}
+            style={{ opacity: activeDogIndex === MOCK_DOGS.length - 1 ? 0.3 : 1 }}
+          >
+            <ChevronRight size={20} color={T.dark} strokeWidth={1.5} />
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity>
           <Edit size={20} color={T.dark} strokeWidth={1.5} />
         </TouchableOpacity>
       </View>
+
+      {/* Dog pagination dots */}
+      {MOCK_DOGS.length > 1 && (
+        <View style={{
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          paddingVertical: 12,
+          backgroundColor: T.white,
+          gap: 6
+        }}>
+          {MOCK_DOGS.map((_, index) => (
+            <TouchableOpacity
+              key={index}
+              onPress={() => {
+                setActiveDogIndex(index);
+                setSelectedDog(MOCK_DOGS[index]);
+              }}
+              style={{
+                width: index === activeDogIndex ? 24 : 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: index === activeDogIndex ? T.teal : T.border,
+              }}
+            />
+          ))}
+        </View>
+      )}
 
       <ScrollView
         style={{ flex: 1 }}
@@ -87,7 +155,7 @@ export function DogProfile() {
         >
           <View style={{ position: "relative", marginBottom: 12 }}>
             <Image
-              source={{ uri: IMGS.bella }}
+              source={{ uri: dog.images?.[0] }}
               style={{
                 width: 112,
                 height: 112,
@@ -98,7 +166,7 @@ export function DogProfile() {
               resizeMode="cover"
             />
             <View style={{ position: "absolute", bottom: 4, right: 4 }}>
-              <VeriBadge verified tier={2} />
+              <VeriBadge tier={dog.verificationTier} />
             </View>
           </View>
           <Text
@@ -109,10 +177,10 @@ export function DogProfile() {
               fontFamily: FONT,
             }}
           >
-            Bella
+            {dog.name}
           </Text>
           <Text style={{ fontSize: 14, color: T.medium }}>
-            Shih Tzu • 2 years • Female
+            {dog.breed} • {dog.age} years • {dog.sex}
           </Text>
         </View>
 
@@ -129,13 +197,13 @@ export function DogProfile() {
             marginBottom: 16,
           }}
         >
-          {[
+          {([
             ["info", "Basic Info", FileText],
             ["health", "Health", Stethoscope],
             ["gallery", "Gallery", Camera],
-          ].map(([id, label, Icon]) => (
+          ] as const).map(([id, label, Icon]) => (
             <TouchableOpacity
-              key={id}
+              key={id as string}
               onPress={() => setTab(id as any)}
               style={{
                 flex: 1,
@@ -182,11 +250,11 @@ export function DogProfile() {
               }}
             >
               {[
-                ["Breed", "Shih Tzu"],
-                ["Age", "2 years"],
-                ["Sex", "Female"],
-                ["Size", "Small"],
-                ["Color", "White & Brown"],
+                ["Breed", dog.breed],
+                ["Age", `${dog.age} years`],
+                ["Sex", dog.sex.charAt(0).toUpperCase() + dog.sex.slice(1)],
+                ["Size", dog.size.charAt(0).toUpperCase() + dog.size.slice(1)],
+                ["Color", dog.color],
               ].map(([k, v], i, arr) => (
                 <View
                   key={k}
@@ -215,7 +283,7 @@ export function DogProfile() {
                 <View
                   style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
                 >
-                  {["Friendly", "Calm", "Energetic"].map((t) => (
+                  {dog.temperament.map((t) => (
                     <View
                       key={t}
                       style={{
@@ -441,7 +509,7 @@ export function DogProfile() {
                 gap: 8,
               }}
             >
-              {[IMGS.bella, IMGS.yuki, IMGS.kiko].map((img, i) => (
+              {[dog.images?.[0], dog.images?.[0], dog.images?.[0]].filter(Boolean).map((img, i) => (
                 <Image
                   key={i}
                   source={{ uri: img }}
@@ -648,7 +716,7 @@ export function OwnerProfile() {
             {MOCK_DOGS.slice(0, 2).map((dog) => (
               <TouchableOpacity
                 key={dog.id}
-                onPress={() => navigate("dog-profile")}
+                onPress={() => navigate("dog-profile", dog)}
                 style={{
                   alignItems: "center",
                   gap: 6,
@@ -665,12 +733,12 @@ export function OwnerProfile() {
               >
                 <View style={{ position: "relative" }}>
                   <Image
-                    source={{ uri: dog.img }}
+                    source={{ uri: dog.images?.[0] }}
                     style={{ width: 64, height: 64, borderRadius: 12 }}
                     resizeMode="cover"
                   />
                   <View style={{ position: "absolute", bottom: -4, right: -4 }}>
-                    {dog.verified ? (
+                    {dog.owner.verificationStatus === 'verified' ? (
                       <CheckCircle
                         size={16}
                         color={T.teal}
@@ -705,6 +773,7 @@ export function OwnerProfile() {
               </TouchableOpacity>
             ))}
             <TouchableOpacity
+              onPress={() => navigate("add-dog")}
               style={{
                 width: 80,
                 height: 120,
@@ -901,7 +970,7 @@ export function MatchProfileScreen() {
           }}
         >
           <Image
-            source={{ uri: dog.img }}
+            source={{ uri: dog.images?.[0] }}
             style={{
               width: 112,
               height: 112,
@@ -926,7 +995,7 @@ export function MatchProfileScreen() {
             {dog.breed} • {dog.age} • {dog.sex}
           </Text>
           <View style={{ marginTop: 8 }}>
-            <VeriBadge verified={dog.verified} tier={dog.tier} />
+            <VeriBadge tier={dog.verificationTier} />
           </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingVertical: 20, gap: 12 }}>
@@ -1089,7 +1158,7 @@ export function SendRequest() {
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Image
-              source={{ uri: dog.img }}
+              source={{ uri: dog.images?.[0] }}
               style={{ width: 48, height: 48, borderRadius: 12 }}
               resizeMode="cover"
             />
@@ -1098,7 +1167,7 @@ export function SendRequest() {
                 {dog.name}
               </Text>
               <Text style={{ fontSize: 12, color: T.medium }}>
-                {dog.breed} • {dog.ownerName}
+                {dog.breed} • {dog.owner.name}
               </Text>
             </View>
           </View>
@@ -1272,6 +1341,362 @@ export function RequestReceived() {
             }}
           >
             Back to Home
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+/* ── Add Dog ──────────────────────────────────────────────────── */
+export function AddDog() {
+  const { navigate, goBack } = useV3();
+  const [formData, setFormData] = useState({
+    name: "",
+    breed: "",
+    age: "",
+    sex: "male" as "male" | "female",
+    size: "medium" as "small" | "medium" | "large",
+    color: "",
+    temperament: [] as string[],
+  });
+
+  const temperamentOptions = [
+    "Friendly",
+    "Calm",
+    "Playful",
+    "Active",
+    "Protective",
+    "Independent",
+    "Loyal",
+    "Energetic",
+  ];
+
+  const toggleTemperament = (temp: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      temperament: prev.temperament.includes(temp)
+        ? prev.temperament.filter((t) => t !== temp)
+        : [...prev.temperament, temp],
+    }));
+  };
+
+  const handleSubmit = () => {
+    // Validate required fields
+    if (!formData.name.trim()) {
+      alert("Please enter the dog's name");
+      return;
+    }
+    if (!formData.breed.trim()) {
+      alert("Please enter the breed");
+      return;
+    }
+    if (!formData.age.trim()) {
+      alert("Please enter the age");
+      return;
+    }
+    if (!formData.color.trim()) {
+      alert("Please enter the color");
+      return;
+    }
+
+    // TODO: Add dog to backend and update context
+    // For now, just show success message and navigate back
+    console.log("Submitting dog profile:", formData);
+
+    // Navigate back to owner profile
+    navigate("owner-profile");
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Header */}
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 48,
+          paddingBottom: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          backgroundColor: T.white,
+          borderBottomWidth: 1,
+          borderBottomColor: T.border,
+        }}
+      >
+        <TouchableOpacity onPress={goBack}>
+          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "700",
+            color: T.dark,
+            fontFamily: FONT,
+          }}
+        >
+          Add New Dog
+        </Text>
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, paddingBottom: 100 }}
+      >
+        {/* Photo upload */}
+        <View style={{ alignItems: "center", marginBottom: 24 }}>
+          <TouchableOpacity
+            style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: T.tealLight,
+              borderWidth: 3,
+              borderColor: T.teal,
+              borderStyle: "dashed",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <Camera size={32} color={T.teal} strokeWidth={1.5} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: T.teal }}>
+              Add Photo
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Basic Info */}
+        <View style={{ gap: 16 }}>
+          {/* Name */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Dog's Name *
+            </Text>
+            <TextInput
+              value={formData.name}
+              onChangeText={(text) => setFormData({ ...formData, name: text })}
+              placeholder="Enter dog's name"
+              placeholderTextColor={T.medium}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: T.border,
+                backgroundColor: T.white,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                fontSize: 14,
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            />
+          </View>
+
+          {/* Breed */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Breed *
+            </Text>
+            <TextInput
+              value={formData.breed}
+              onChangeText={(text) => setFormData({ ...formData, breed: text })}
+              placeholder="Enter breed"
+              placeholderTextColor={T.medium}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: T.border,
+                backgroundColor: T.white,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                fontSize: 14,
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            />
+          </View>
+
+          {/* Age */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Age (years) *
+            </Text>
+            <TextInput
+              value={formData.age}
+              onChangeText={(text) => setFormData({ ...formData, age: text })}
+              placeholder="Enter age"
+              placeholderTextColor={T.medium}
+              keyboardType="numeric"
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: T.border,
+                backgroundColor: T.white,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                fontSize: 14,
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            />
+          </View>
+
+          {/* Sex */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Sex *
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {(["male", "female"] as const).map((sex) => (
+                <TouchableOpacity
+                  key={sex}
+                  onPress={() => setFormData({ ...formData, sex })}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: formData.sex === sex ? T.teal : T.border,
+                    backgroundColor: formData.sex === sex ? T.tealLight : T.white,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: formData.sex === sex ? T.teal : T.medium,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {sex}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Size */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Size *
+            </Text>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {(["small", "medium", "large"] as const).map((size) => (
+                <TouchableOpacity
+                  key={size}
+                  onPress={() => setFormData({ ...formData, size })}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: formData.size === size ? T.teal : T.border,
+                    backgroundColor: formData.size === size ? T.tealLight : T.white,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: formData.size === size ? T.teal : T.medium,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {size}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Color */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Color *
+            </Text>
+            <TextInput
+              value={formData.color}
+              onChangeText={(text) => setFormData({ ...formData, color: text })}
+              placeholder="Enter color"
+              placeholderTextColor={T.medium}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: T.border,
+                backgroundColor: T.white,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                fontSize: 14,
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            />
+          </View>
+
+          {/* Temperament */}
+          <View>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
+              Temperament (Select up to 3)
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {temperamentOptions.map((temp) => (
+                <TouchableOpacity
+                  key={temp}
+                  onPress={() => toggleTemperament(temp)}
+                  disabled={!formData.temperament.includes(temp) && formData.temperament.length >= 3}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 16,
+                    borderWidth: 2,
+                    borderColor: formData.temperament.includes(temp) ? T.teal : T.border,
+                    backgroundColor: formData.temperament.includes(temp) ? T.tealLight : T.white,
+                    opacity: !formData.temperament.includes(temp) && formData.temperament.length >= 3 ? 0.4 : 1,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "600",
+                      color: formData.temperament.includes(temp) ? T.teal : T.medium,
+                    }}
+                  >
+                    {temp}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Submit button */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingHorizontal: 20,
+          paddingVertical: 16,
+          backgroundColor: T.white,
+          borderTopWidth: 1,
+          borderTopColor: T.border,
+        }}
+      >
+        <TouchableOpacity
+          onPress={handleSubmit}
+          style={{
+            paddingVertical: 16,
+            borderRadius: 12,
+            backgroundColor: T.teal,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "700", color: "#fff", fontFamily: FONT }}>
+            Add Dog Profile
           </Text>
         </TouchableOpacity>
       </View>

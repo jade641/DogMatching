@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   Award,
   Bell,
   Calendar,
@@ -101,7 +102,7 @@ export function MatchCard({
       )}
       <View style={{ position: "relative" }}>
         <Image
-          source={{ uri: dog.img }}
+          source={{ uri: dog.images?.[0] }}
           style={{ width: "100%", height: 160 }}
           resizeMode="cover"
         />
@@ -124,7 +125,7 @@ export function MatchCard({
           >
             {dog.name}
           </Text>
-          <VeriBadge verified={dog.verified} tier={dog.tier} />
+          <VeriBadge tier={dog.verificationTier} />
         </View>
         <Text style={{ fontSize: 12, color: T.medium }}>
           {dog.breed} • {dog.age} • {dog.sex}
@@ -156,7 +157,7 @@ export function MatchCard({
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
-              {dog.ownerAvatar}
+              {dog.owner.name.charAt(0)}
             </Text>
           </View>
           <View
@@ -168,15 +169,15 @@ export function MatchCard({
             }}
           >
             <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.ownerName} •
+              {dog.owner.name} •
             </Text>
             <MapPin size={10} color={T.medium} strokeWidth={2} />
             <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.ownerLocation.split(",")[0]}
+              {dog.owner.location.split(",")[0]}
             </Text>
           </View>
         </View>
-        <ScoreBar score={dog.score} />
+        <ScoreBar score={85} />
         <View
           style={{
             flexDirection: "row",
@@ -473,7 +474,7 @@ export function HomeScreen() {
                     textTransform: "uppercase",
                   }}
                 >
-                  Smart Breeding Match
+                  Breeding Match
                 </Text>
               </View>
               <Text
@@ -764,7 +765,7 @@ export function MatchScreen() {
               </View>
             )}
             <Image
-              source={{ uri: dog.img }}
+              source={{ uri: dog.images?.[0] }}
               style={{ width: "100%", height: 180 }}
               resizeMode="cover"
             />
@@ -786,7 +787,7 @@ export function MatchScreen() {
                 >
                   {dog.name}
                 </Text>
-                <VeriBadge verified={dog.verified} tier={dog.tier} />
+                <VeriBadge tier={dog.verificationTier} />
               </View>
               <Text style={{ fontSize: 14, color: T.medium }}>
                 {dog.breed} • {dog.age} • {dog.sex}
@@ -822,7 +823,7 @@ export function MatchScreen() {
                   <Text
                     style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
                   >
-                    {dog.ownerAvatar}
+                    {dog.owner.name.charAt(0)}
                   </Text>
                 </View>
                 <View
@@ -834,15 +835,15 @@ export function MatchScreen() {
                   }}
                 >
                   <Text style={{ fontSize: 12, color: T.medium }}>
-                    {dog.ownerName} •
+                    {dog.owner.name} •
                   </Text>
                   <MapPin size={10} color={T.medium} strokeWidth={2} />
                   <Text style={{ fontSize: 12, color: T.medium }}>
-                    {dog.ownerLocation}
+                    {dog.owner.location}
                   </Text>
                 </View>
               </View>
-              <ScoreBar score={dog.score} />
+              <ScoreBar score={85} />
               <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
                 <TouchableOpacity
                   onPress={() => navigate("send-request", dog)}
@@ -933,7 +934,7 @@ function rankDog(
   dog: (typeof MOCK_DOGS)[number],
   prefs: FilterPrefs,
 ): RankedDog {
-  let score = dog.score;
+  let score = 70; // Start with a base score since dog.score doesn't exist in the type
   const reasons: string[] = [];
 
   const breedPref = normalizeText(prefs.breed);
@@ -1097,7 +1098,7 @@ export function FilterScreen() {
               justifyContent: "center",
             }}
           >
-            <Text style={{ fontSize: 18, color: T.dark }}>←</Text>
+            <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text
@@ -1183,7 +1184,6 @@ export function FilterScreen() {
                   letterSpacing: 0.6,
                 }}
               >
-                Smart UI / UX
               </Text>
             </View>
             <Text

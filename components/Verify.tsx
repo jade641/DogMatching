@@ -1,28 +1,28 @@
 import {
-    ArrowLeft,
-    Award,
-    Camera,
-    CheckCircle,
-    Clock,
-    Dna,
-    FileCheck,
-    FolderOpen,
-    RotateCcw,
-    Search,
-    Shield,
-    Star,
-    Stethoscope,
-    Syringe,
-    Upload,
-    XCircle,
+  ArrowLeft,
+  Award,
+  Camera,
+  CheckCircle,
+  Clock,
+  Dna,
+  FileCheck,
+  FolderOpen,
+  RotateCcw,
+  Search,
+  Shield,
+  Star,
+  Stethoscope,
+  Syringe,
+  Upload,
+  XCircle,
 } from "lucide-react-native";
 import { useState } from "react";
 import {
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { FONT, MOCK_VERIFIERS, T, useV3 } from "../contexts/AppContext";
 
@@ -94,10 +94,10 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
 }
 
 const DOC_TYPES = [
-  { Icon: Syringe, t: "Vaccination Card", req: true },
-  { Icon: Stethoscope, t: "Veterinary Health Clearance", req: false },
-  { Icon: FileCheck, t: "Pedigree Certificate", req: false },
-  { Icon: Dna, t: "DNA / Genetic Test Result", req: false },
+  { Icon: Syringe, t: "Vaccination Card", req: true, e: "💉" },
+  { Icon: Stethoscope, t: "Veterinary Health Clearance", req: false, e: "🩺" },
+  { Icon: FileCheck, t: "Pedigree Certificate", req: false, e: "📋" },
+  { Icon: Dna, t: "DNA / Genetic Test Result", req: false, e: "🧬" },
 ];
 
 /* ── Screen 9A: Upload ─────────────────────────────────────── */
@@ -538,8 +538,7 @@ export function VerifyChoose() {
         }}
       >
         <Text style={{ fontSize: 14, color: T.medium }}>
-          Select a licensed veterinarian or certified breeder to review your
-          documents.
+          Select a licensed veterinarian to review your documents.
         </Text>
 
         {/* Search */}
@@ -560,7 +559,7 @@ export function VerifyChoose() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search for a vet or breeder"
+            placeholder="Search for a veterinarian"
             placeholderTextColor={T.medium}
             style={{
               flex: 1,
@@ -728,18 +727,21 @@ export function VerifyStatus() {
       label: "Under Review",
       color: T.amber,
       bg: T.amberLight,
+      e: "⏳",
     },
     verified: {
       Icon: CheckCircle,
       label: "Verified!",
       color: T.teal,
       bg: T.tealLight,
+      e: "✅",
     },
     rejected: {
       Icon: XCircle,
       label: "Rejected",
       color: T.coral,
       bg: T.coralLight,
+      e: "❌",
     },
   };
   const s = statusMap[docStatus];

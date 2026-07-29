@@ -1,7 +1,10 @@
-// Placeholder Context component file
-// This file is intentionally left blank for now.
-import { createContext, ReactNode, useContext, useState } from "react";
+// Enhanced Context with proper state management
+import { createContext, ReactNode, useCallback, useContext, useReducer } from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { AppState, Conversation, Dog, LoadingState, MatchResult, Notification, Owner, Screen } from "../types";
+
+// Re-export types for convenience
+export type { Dog, Owner, Screen };
 
 /* ── Design Tokens ───────────────────────────────────────────── */
 export const T = {
@@ -24,6 +27,12 @@ export const T = {
   mintGreenDark: "#3DAA87", // Dark mint
 
   vibrantBlue: "#2196F3", // Vibrant Blue - engaging nod to canine vision
+
+  // Status colors
+  success: "#4CAF50",
+  warning: "#FF9800",
+  error: "#F44336",
+  info: "#2196F3",
 
   // Neutrals
   dark: "#2C2C2A", // Dark text
@@ -48,577 +57,567 @@ export const T = {
   shadowLg: "0 8px 24px rgba(0,0,0,0.12)",
 };
 
-export const FONT = "'Inter', 'Plus Jakarta Sans', system-ui, sans-serif";
+export const FONT = "Roboto_400Regular";
 
-/* ── Screen types ────────────────────────────────────────────── */
-export type Screen =
-  | "landing"
-  | "splash"
-  | "onboarding"
-  | "register"
-  | "login"
-  | "home"
-  | "match"
-  | "filter"
-  | "match-profile"
-  | "send-request"
-  | "conversation"
-  | "request-received"
-  | "dog-profile"
-  | "owner-profile"
-  | "verify-upload"
-  | "verify-choose"
-  | "verify-status"
-  | "reputation"
-  | "notifications"
-  | "events"
-  | "settings"
-  | "empty-matches"
-  | "empty-notif"
-  | "empty-verify";
-
-/* ── Types ───────────────────────────────────────────────────── */
-export interface Dog {
-  id: string;
-  name: string;
-  breed: string;
-  age: string;
-  sex: "Male" | "Female";
-  size: "Small" | "Medium" | "Large";
-  color: string;
-  temperament: string[];
-  score: number;
-  verified: boolean;
-  tier: 1 | 2 | 3;
-  ownerName: string;
-  ownerLocation: string;
-  ownerAvatar: string;
-  img: string;
-  rating: number;
-  reviews: number;
-}
-
-/* ── Mock Data ───────────────────────────────────────────────── */
+// Dog images from Unsplash
 const IMGS = {
-  bella:
-    "https://images.unsplash.com/photo-1629740067905-bd3f515aa739?w=600&fit=crop",
-  choco:
-    "https://images.unsplash.com/photo-1633722715463-d30f4f325e24?w=600&fit=crop",
-  luna: "https://images.unsplash.com/photo-1693615775129-f2004d6e3e0b?w=600&fit=crop",
-  bruno:
-    "https://images.unsplash.com/photo-1637098063179-d73d8034621c?w=600&fit=crop",
-  yuki: "https://images.unsplash.com/photo-1721781060617-2c451646fee7?w=600&fit=crop",
+  bella: "https://images.unsplash.com/photo-1629740067905-bd3f515aa739?w=600&fit=crop",
+  choco: "https://images.unsplash.com/photo-1633722715463-d30f4f325e24?w=600&fit=crop",
+  luna: "https://images.unsplash.com/photo-1505628346881-b72b27e84530?w=600&fit=crop",
   rex: "https://images.unsplash.com/photo-1539692177343-b2b990faef15?w=600&fit=crop",
   kiko: "https://images.unsplash.com/photo-1721781010133-8eb0e9b23daf?w=600&fit=crop",
-  ganda:
-    "https://images.unsplash.com/photo-1693615774176-a5560f55ac49?w=600&fit=crop",
+  yuki: "https://images.unsplash.com/photo-1693615774176-a5560f55ac49?w=600&fit=crop",
+  ganda: "https://images.unsplash.com/photo-1693615774176-a5560f55ac49?w=600&fit=crop",
+  bruno: "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&fit=crop",
+  max: "https://images.unsplash.com/photo-1568572933382-74d440642117?w=600&fit=crop",
+  rocky: "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=600&fit=crop",
 };
+
 export { IMGS };
 
-export const MOCK_DOGS: Dog[] = [
-  {
-    id: "d1",
-    name: "Bella",
-    breed: "Shih Tzu",
-    age: "2 yrs",
-    sex: "Female",
-    size: "Small",
-    color: "White & Brown",
-    temperament: ["Friendly", "Calm", "Playful"],
-    score: 94,
-    verified: true,
-    tier: 2,
-    ownerName: "Maria Santos",
-    ownerLocation: "Buhangin, Davao City",
-    ownerAvatar: "MS",
-    img: IMGS.bella,
-    rating: 4.8,
-    reviews: 12,
-  },
-  {
-    id: "d2",
-    name: "Choco",
-    breed: "Golden Retriever",
-    age: "3 yrs",
-    sex: "Male",
-    size: "Large",
-    color: "Golden Brown",
-    temperament: ["Friendly", "Active", "Playful"],
-    score: 87,
-    verified: true,
-    tier: 2,
-    ownerName: "Carlo Reyes",
-    ownerLocation: "Matina, Davao City",
-    ownerAvatar: "CR",
-    img: IMGS.choco,
-    rating: 4.5,
-    reviews: 8,
-  },
-  {
-    id: "d3",
-    name: "Luna",
-    breed: "Golden Retriever",
-    age: "1.5 yrs",
-    sex: "Female",
-    size: "Large",
-    color: "Light Gold",
-    temperament: ["Calm", "Friendly"],
-    score: 82,
-    verified: false,
-    tier: 1,
-    ownerName: "Ana Lim",
-    ownerLocation: "Toril, Davao City",
-    ownerAvatar: "AL",
-    img: IMGS.luna,
-    rating: 4.2,
-    reviews: 5,
-  },
-  {
-    id: "d4",
-    name: "Bruno",
-    breed: "German Shepherd",
-    age: "4 yrs",
-    sex: "Male",
-    size: "Large",
-    color: "Black & Tan",
-    temperament: ["Independent", "Calm"],
-    score: 79,
-    verified: true,
-    tier: 3,
-    ownerName: "Mark Villanueva",
-    ownerLocation: "Agdao, Davao City",
-    ownerAvatar: "MV",
-    img: IMGS.bruno,
-    rating: 4.9,
-    reviews: 17,
-  },
-  {
-    id: "d5",
-    name: "Yuki",
-    breed: "Pomeranian",
-    age: "1 yr",
-    sex: "Female",
-    size: "Small",
-    color: "White",
-    temperament: ["Playful", "Friendly", "Active"],
-    score: 91,
-    verified: true,
-    tier: 2,
-    ownerName: "Jenny Cruz",
-    ownerLocation: "Matina, Davao City",
-    ownerAvatar: "JC",
-    img: IMGS.yuki,
-    rating: 4.7,
-    reviews: 9,
-  },
-  {
-    id: "d6",
-    name: "Rex",
-    breed: "Labrador Retriever",
-    age: "3 yrs",
-    sex: "Male",
-    size: "Large",
-    color: "Black",
-    temperament: ["Friendly", "Active"],
-    score: 76,
-    verified: true,
-    tier: 3,
-    ownerName: "Ben Santos",
-    ownerLocation: "Buhangin, Davao City",
-    ownerAvatar: "BS",
-    img: IMGS.rex,
-    rating: 4.6,
-    reviews: 14,
-  },
-];
+// Action types for reducer
+type AppAction =
+  | { type: 'SET_SCREEN'; payload: Screen }
+  | { type: 'SET_USER'; payload: Owner | null }
+  | { type: 'SET_SELECTED_DOG'; payload: Dog | null }
+  | { type: 'SET_MATCH_RESULTS'; payload: MatchResult[] }
+  | { type: 'SET_LOADING'; payload: { key: string; state: LoadingState } }
+  | { type: 'ADD_NOTIFICATION'; payload: Notification }
+  | { type: 'MARK_NOTIFICATION_READ'; payload: string }
+  | { type: 'SET_CONVERSATIONS'; payload: Conversation[] };
 
-export const MOCK_VERIFIERS = [
-  {
-    id: "v1",
-    name: "Dr. Patricia Reyes",
-    role: "Licensed Veterinarian",
-    clinic: "Davao Animal Clinic",
-    rating: 4.9,
-    available: true,
-    avatar: "PR",
-  },
-  {
-    id: "v2",
-    name: "Dr. Eduardo Tan",
-    role: "Certified Breeder",
-    clinic: "Mindanao K9 Center",
-    rating: 4.8,
-    available: true,
-    avatar: "ET",
-  },
-  {
-    id: "v3",
-    name: "Dr. Angela Flores",
-    role: "Licensed Veterinarian",
-    clinic: "City Pet Hospital",
-    rating: 4.7,
-    available: false,
-    avatar: "AF",
-  },
-];
-
-/* ── Context ─────────────────────────────────────────────────── */
-interface ContextType {
-  screen: Screen;
-  selectedDog: Dog | null;
-  userName: string;
-  navigate: (s: Screen, dog?: Dog) => void;
-  goBack: () => void;
+// Enhanced app state
+interface EnhancedAppState extends AppState {
+  history: Screen[];
+  loadingStates: Record<string, LoadingState>;
+  preferences: {
+    notifications: boolean;
+    darkMode: boolean;
+    language: string;
+  };
 }
 
-const Context = createContext<ContextType | null>(null);
+const initialState: EnhancedAppState = {
+  screen: "landing",
+  selectedDog: null,
+  currentUser: null,
+  isAuthenticated: false,
+  matchResults: [],
+  conversations: [],
+  notifications: [],
+  history: [],
+  loadingStates: {},
+  preferences: {
+    notifications: true,
+    darkMode: false,
+    language: 'en'
+  }
+};
 
-export function V3Provider({ children }: { children: ReactNode }) {
-  const [screen, setScreen] = useState<Screen>("landing");
-  const [history, setHistory] = useState<Screen[]>([]);
-  const [selectedDog, setSelectedDog] = useState<Dog | null>(null);
+// Reducer function
+function appReducer(state: EnhancedAppState, action: AppAction): EnhancedAppState {
+  switch (action.type) {
+    case 'SET_SCREEN':
+      return {
+        ...state,
+        screen: action.payload,
+        history: [...state.history, action.payload].slice(-10) // Keep last 10 screens
+      };
+    case 'SET_USER':
+      return {
+        ...state,
+        currentUser: action.payload,
+        isAuthenticated: !!action.payload
+      };
+    case 'SET_SELECTED_DOG':
+      return {
+        ...state,
+        selectedDog: action.payload
+      };
+    case 'SET_MATCH_RESULTS':
+      return {
+        ...state,
+        matchResults: action.payload
+      };
+    case 'SET_LOADING':
+      return {
+        ...state,
+        loadingStates: {
+          ...state.loadingStates,
+          [action.payload.key]: action.payload.state
+        }
+      };
+    case 'ADD_NOTIFICATION':
+      return {
+        ...state,
+        notifications: [action.payload, ...state.notifications]
+      };
+    case 'MARK_NOTIFICATION_READ':
+      return {
+        ...state,
+        notifications: state.notifications.map(n =>
+          n.id === action.payload ? { ...n, read: true } : n
+        )
+      };
+    case 'SET_CONVERSATIONS':
+      return {
+        ...state,
+        conversations: action.payload
+      };
+    default:
+      return state;
+  }
+}
 
-  const navigate = (s: Screen, dog?: Dog) => {
-    setHistory((h) => [...h, screen]);
-    if (dog) setSelectedDog(dog);
-    setScreen(s);
-  };
+// Context type
+interface AppContextType {
+  state: EnhancedAppState;
+  navigate: (screen: Screen, data?: any) => void;
+  goBack: () => void;
+  setUser: (user: Owner | null) => void;
+  setSelectedDog: (dog: Dog | null) => void;
+  setMatchResults: (results: MatchResult[]) => void;
+  setLoading: (key: string, loading: LoadingState) => void;
+  addNotification: (notification: Omit<Notification, 'id'>) => void;
+  markNotificationRead: (id: string) => void;
+  isLoading: (key: string) => boolean;
+  // Computed values
+  screen: Screen;
+  selectedDog: Dog | null;
+  currentUser: Owner | null;
+  userName: string;
+}
 
-  const goBack = () => {
-    const prev = [...history];
-    const last = prev.pop();
-    setHistory(prev);
-    if (last) setScreen(last);
+const AppContext = createContext<AppContextType | null>(null);
+
+// Provider component
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(appReducer, initialState);
+
+  const navigate = useCallback((screen: Screen, data?: any) => {
+    dispatch({ type: 'SET_SCREEN', payload: screen });
+    if (data && typeof data === 'object' && 'id' in data) {
+      dispatch({ type: 'SET_SELECTED_DOG', payload: data as Dog });
+    }
+  }, []);
+
+  const goBack = useCallback(() => {
+    const previousScreen = state.history[state.history.length - 2];
+    if (previousScreen) {
+      dispatch({ type: 'SET_SCREEN', payload: previousScreen });
+    }
+  }, [state.history]);
+
+  const setUser = useCallback((user: Owner | null) => {
+    dispatch({ type: 'SET_USER', payload: user });
+  }, []);
+
+  const setSelectedDog = useCallback((dog: Dog | null) => {
+    dispatch({ type: 'SET_SELECTED_DOG', payload: dog });
+  }, []);
+
+  const setMatchResults = useCallback((results: MatchResult[]) => {
+    dispatch({ type: 'SET_MATCH_RESULTS', payload: results });
+  }, []);
+
+  const setLoading = useCallback((key: string, loading: LoadingState) => {
+    dispatch({ type: 'SET_LOADING', payload: { key, state: loading } });
+  }, []);
+
+  const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
+    const fullNotification: Notification = {
+      ...notification,
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 9)
+    };
+    dispatch({ type: 'ADD_NOTIFICATION', payload: fullNotification });
+  }, []);
+
+  const markNotificationRead = useCallback((id: string) => {
+    dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id });
+  }, []);
+
+  const isLoading = useCallback((key: string) => {
+    return state.loadingStates[key] === 'loading';
+  }, [state.loadingStates]);
+
+  const contextValue: AppContextType = {
+    state,
+    navigate,
+    goBack,
+    setUser,
+    setSelectedDog,
+    setMatchResults,
+    setLoading,
+    addNotification,
+    markNotificationRead,
+    isLoading,
+    // Computed values for backward compatibility
+    screen: state.screen,
+    selectedDog: state.selectedDog,
+    currentUser: state.currentUser,
+    userName: state.currentUser?.name || 'Juan',
   };
 
   return (
-    <Context.Provider
-      value={{ screen, selectedDog, userName: "Juan", navigate, goBack }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
-    </Context.Provider>
+    </AppContext.Provider>
   );
 }
 
+// Hook to use the context
 export function useV3() {
-  const ctx = useContext(Context);
-  if (!ctx) throw new Error("useV3 must be within V3Provider");
-  return ctx;
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useV3 must be used within an AppProvider');
+  }
+  return context;
 }
 
-/* ── Shared UI components ────────────────────────────────────── */
+// Enhanced UI Components with better accessibility and design
 export function Btn({
   children,
   onClick,
-  variant = "primary",
+  variant = 'primary',
   disabled = false,
-  sm = false,
+  loading = false,
+  size = 'medium',
+  icon
 }: {
-  children: ReactNode;
-  onClick?: () => void;
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  children: string;
+  onClick: () => void;
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   disabled?: boolean;
-  sm?: boolean;
+  loading?: boolean;
+  size?: 'small' | 'medium' | 'large';
+  icon?: React.ReactNode;
 }) {
-  const styles: Record<string, any> = {
-    primary: { backgroundColor: T.teal },
-    secondary: {
-      backgroundColor: "#fff",
-      borderWidth: 1.5,
-      borderColor: T.teal,
-    },
-    danger: { backgroundColor: T.coral },
-    ghost: {
-      backgroundColor: "transparent",
-      borderWidth: 1.5,
-      borderColor: T.border,
-    },
+  const getVariantStyles = () => {
+    switch (variant) {
+      case 'secondary':
+        return {
+          backgroundColor: T.secondary,
+          borderColor: T.secondary,
+        };
+      case 'outline':
+        return {
+          backgroundColor: 'transparent',
+          borderColor: T.primary,
+          borderWidth: 2,
+        };
+      case 'ghost':
+        return {
+          backgroundColor: 'transparent',
+          borderColor: 'transparent',
+        };
+      default:
+        return {
+          backgroundColor: T.primary,
+          borderColor: T.primary,
+        };
+    }
   };
+
+  const getSizeStyles = () => {
+    switch (size) {
+      case 'small':
+        return { paddingVertical: 8, paddingHorizontal: 16, minHeight: 36 };
+      case 'large':
+        return { paddingVertical: 16, paddingHorizontal: 24, minHeight: 56 };
+      default:
+        return { paddingVertical: 12, paddingHorizontal: 20, minHeight: 48 };
+    }
+  };
+
+  const getTextColor = () => {
+    return variant === 'outline' || variant === 'ghost' ? T.primary : '#fff';
+  };
+
   return (
     <TouchableOpacity
       onPress={onClick}
-      disabled={disabled}
-      style={{
-        ...styles[variant],
-        paddingHorizontal: sm ? 16 : 20,
-        paddingVertical: sm ? 8 : 14,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
-        opacity: disabled ? 0.4 : 1,
-      }}
+      disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={children}
+      accessibilityState={{ disabled: disabled || loading }}
+      style={[
+        {
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          gap: icon ? 8 : 0,
+          opacity: disabled ? 0.6 : 1,
+          ...getVariantStyles(),
+          ...getSizeStyles(),
+        }
+      ]}
     >
-      <Text
-        style={{
-          fontSize: sm ? 12 : 14,
-          fontWeight: "700",
-          color:
-            variant === "primary" || variant === "danger"
-              ? "#fff"
-              : variant === "secondary"
-                ? T.teal
-                : T.dark,
-          fontFamily: FONT,
-        }}
-      >
-        {children}
-      </Text>
+      {loading ? (
+        <Text style={{ color: getTextColor(), fontWeight: '600' }}>Loading...</Text>
+      ) : (
+        <>
+          {icon}
+          <Text style={{
+            color: getTextColor(),
+            fontWeight: '600',
+            fontFamily: FONT,
+            fontSize: size === 'small' ? 14 : size === 'large' ? 18 : 16
+          }}>
+            {children}
+          </Text>
+        </>
+      )}
     </TouchableOpacity>
   );
 }
 
 export function Field({
-  emoji,
-  placeholder,
-  type = "text",
+  label,
   value,
+  onChange,
+  onBlur,
+  placeholder,
+  secure = false,
+  error,
+  multiline = false,
+  autoCapitalize = 'sentences'
 }: {
-  emoji: string;
-  placeholder: string;
-  type?: string;
-  value?: string;
+  label?: string;
+  value: string;
+  onChange: (text: string) => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  secure?: boolean;
+  error?: string;
+  multiline?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 16,
-        height: 52,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: T.border,
-        backgroundColor: T.white,
-      }}
-    >
-      <Text style={{ fontSize: 18 }}>{emoji}</Text>
-      <TextInput
-        placeholder={placeholder}
-        defaultValue={value}
-        secureTextEntry={type === "password"}
-        style={{
-          flex: 1,
+    <View style={{ marginBottom: 16 }}>
+      {label && (
+        <Text style={{
           fontSize: 14,
+          fontWeight: '600',
           color: T.dark,
+          marginBottom: 6,
+          fontFamily: FONT
+        }}>
+          {label}
+        </Text>
+      )}
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        secureTextEntry={secure}
+        multiline={multiline}
+        autoCapitalize={autoCapitalize}
+        accessibilityLabel={label}
+        style={{
+          borderWidth: 1,
+          borderColor: error ? T.error : T.border,
+          borderRadius: 12,
+          paddingHorizontal: 16,
+          paddingVertical: multiline ? 16 : 12,
+          fontSize: 16,
           fontFamily: FONT,
+          backgroundColor: T.white,
+          minHeight: multiline ? 100 : 48,
+          textAlignVertical: multiline ? 'top' : 'center'
         }}
-        placeholderTextColor={T.medium}
       />
-    </View>
-  );
-}
-
-export function Chip({
-  children,
-  active,
-  onPress,
-}: {
-  children: ReactNode;
-  active?: boolean;
-  onPress?: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={{
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        backgroundColor: active ? T.teal : T.white,
-        borderWidth: 1,
-        borderColor: active ? T.teal : T.border,
-      }}
-    >
-      <Text
-        style={{
+      {error && (
+        <Text style={{
           fontSize: 12,
-          fontWeight: "600",
-          color: active ? "#fff" : T.dark,
-          fontFamily: FONT,
-        }}
-      >
-        {children}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-export function VeriBadge({
-  verified,
-  tier,
-}: {
-  verified?: boolean;
-  tier?: number;
-}) {
-  if (tier === 3)
-    return (
-      <View
-        style={{
-          paddingHorizontal: 8,
-          paddingVertical: 2,
-          borderRadius: 12,
-          backgroundColor: T.amberLight,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: "#8a5a00",
-            fontFamily: FONT,
-          }}
-        >
-          Tier 3
+          color: T.error,
+          marginTop: 4,
+          fontFamily: FONT
+        }}>
+          {error}
         </Text>
-      </View>
-    );
-  if (verified || tier === 2)
-    return (
-      <View
-        style={{
-          paddingHorizontal: 8,
-          paddingVertical: 2,
-          borderRadius: 12,
-          backgroundColor: T.tealLight,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: T.tealDark,
-            fontFamily: FONT,
-          }}
-        >
-          Verified
-        </Text>
-      </View>
-    );
-  return (
-    <View
-      style={{
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
-        backgroundColor: T.amberLight,
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "700",
-          color: "#a06000",
-          fontFamily: FONT,
-        }}
-      >
-        Pending
-      </Text>
+      )}
     </View>
   );
 }
 
-export function ScoreBar({ score }: { score: number }) {
-  return (
-    <View>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 4,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "700",
-            color: T.teal,
-            fontFamily: FONT,
-          }}
-        >
-          {score}% Compatible
-        </Text>
-      </View>
-      <View
-        style={{
-          height: 8,
-          borderRadius: 4,
-          overflow: "hidden",
-          backgroundColor: T.light,
-        }}
-      >
-        <View
-          style={{
-            width: `${score}%`,
-            height: "100%",
-            borderRadius: 4,
-            backgroundColor: T.teal,
-          }}
-        />
-      </View>
-    </View>
-  );
-}
+// Mock data with proper types
+export const MOCK_DOGS: Dog[] = [
+  {
+    id: "1",
+    name: "Bella",
+    breed: "Shih Tzu",
+    sex: "female",
+    age: 3,
+    size: "small",
+    color: "Brown and White",
+    temperament: ["Friendly", "Energetic", "Loyal"],
+    location: "Davao City",
+    images: [IMGS.bella],
+    verificationTier: 2,
+    healthRecords: [],
+    owner: {
+      id: "owner1",
+      name: "Maria Santos",
+      avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=MS",
+      location: "Davao City, Philippines",
+      memberSince: "2023-01-15",
+      reputation: 4.8,
+      totalMatches: 12,
+      successfulBreedings: 8,
+      verificationStatus: "verified",
+      badges: []
+    },
+    description: "Bella is a loving and energetic Shih Tzu looking for a compatible mate.",
+    lastActive: "2024-01-15"
+  },
+  {
+    id: "2",
+    name: "Max",
+    breed: "Siberian Husky",
+    sex: "male",
+    age: 4,
+    size: "large",
+    color: "Grey and White",
+    temperament: ["Loyal", "Protective", "Intelligent"],
+    location: "Matina, Davao",
+    images: [IMGS.max],
+    verificationTier: 3,
+    healthRecords: [],
+    owner: {
+      id: "owner2",
+      name: "Carlos Reyes",
+      avatar: "https://via.placeholder.com/100x100/FF6B6B/ffffff?text=CR",
+      location: "Matina, Davao",
+      memberSince: "2022-08-20",
+      reputation: 4.9,
+      totalMatches: 18,
+      successfulBreedings: 12,
+      verificationStatus: "verified",
+      badges: []
+    },
+    description: "Max is a strong and intelligent Siberian Husky with excellent pedigree.",
+    lastActive: "2024-01-16"
+  },
+  {
+    id: "3",
+    name: "Luna",
+    breed: "Shiba Inu",
+    sex: "female",
+    age: 2,
+    size: "medium",
+    color: "Red and White",
+    temperament: ["Playful", "Friendly", "Active"],
+    location: "Buhangin, Davao",
+    images: [IMGS.luna],
+    verificationTier: 2,
+    healthRecords: [],
+    owner: {
+      id: "owner3",
+      name: "Anna Cruz",
+      avatar: "https://via.placeholder.com/100x100/9370DB/ffffff?text=AC",
+      location: "Buhangin, Davao",
+      memberSince: "2023-03-10",
+      reputation: 4.7,
+      totalMatches: 8,
+      successfulBreedings: 5,
+      verificationStatus: "verified",
+      badges: []
+    },
+    description: "Luna is a beautiful and playful Shiba Inu with a great temperament.",
+    lastActive: "2024-01-14"
+  },
+  {
+    id: "4",
+    name: "Rocky",
+    breed: "Beagle",
+    sex: "male",
+    age: 3,
+    size: "medium",
+    color: "Tricolor",
+    temperament: ["Calm", "Friendly", "Gentle"],
+    location: "Toril, Davao",
+    images: [IMGS.rocky],
+    verificationTier: 1,
+    healthRecords: [],
+    owner: {
+      id: "owner4",
+      name: "Jose Garcia",
+      avatar: "https://via.placeholder.com/100x100/20B2AA/ffffff?text=JG",
+      location: "Toril, Davao",
+      memberSince: "2023-06-15",
+      reputation: 4.6,
+      totalMatches: 5,
+      successfulBreedings: 3,
+      verificationStatus: "verified",
+      badges: []
+    },
+    description: "Rocky is a calm and gentle Beagle, perfect for breeding.",
+    lastActive: "2024-01-13"
+  },
+];
 
-export function TopBar({
-  title,
-  onBack,
-  rightEmoji,
-  onRight,
-}: {
-  title?: string;
-  onBack?: () => void;
-  rightEmoji?: string;
-  onRight?: () => void;
-}) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 20,
-        paddingTop: 48,
-        paddingBottom: 12,
-        backgroundColor: T.white,
-        borderBottomWidth: 1,
-        borderBottomColor: T.border,
-      }}
-    >
-      {onBack && (
-        <TouchableOpacity
-          onPress={onBack}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: T.bg,
-          }}
-        >
-          <Text style={{ fontSize: 18 }}>←</Text>
-        </TouchableOpacity>
-      )}
-      {title && (
-        <Text
-          style={{
-            flex: 1,
-            fontWeight: "600",
-            fontSize: 16,
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        >
-          {title}
-        </Text>
-      )}
-      {rightEmoji && onRight && (
-        <TouchableOpacity onPress={onRight}>
-          <Text style={{ fontSize: 20 }}>{rightEmoji}</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
+export const MOCK_VERIFIERS = [
+  {
+    id: "1",
+    name: "Dr. Juan Veterinarian",
+    type: "Licensed Veterinarian" as const,
+    rating: 4.9,
+    experience: "15 years",
+    location: "Davao City",
+    specialties: ["Breeding Health", "Genetic Testing"],
+    avatar: "JV",
+    role: "Licensed Veterinarian",
+    clinic: "Davao Animal Clinic",
+    available: true
+  }
+];
+
+// Legacy components for backward compatibility
+export const Chip = ({ children, active, onPress }: { children: string; active?: boolean; onPress?: () => void }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    disabled={!onPress}
+    style={{
+      backgroundColor: active ? T.primary : T.primaryLight,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      alignSelf: 'flex-start'
+    }}
+  >
+    <Text style={{ color: active ? '#fff' : T.primary, fontSize: 12, fontWeight: '600' }}>
+      {children}
+    </Text>
+  </TouchableOpacity>
+);
+
+export const VeriBadge = ({ tier }: { tier: 1 | 2 | 3 }) => (
+  <View style={{
+    backgroundColor: tier === 3 ? T.amber : tier === 2 ? T.teal : T.medium,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  }}>
+    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+      TIER {tier}
+    </Text>
+  </View>
+);
+
+export const ScoreBar = ({ score }: { score: number }) => (
+  <View style={{
+    height: 6,
+    backgroundColor: T.bg,
+    borderRadius: 3,
+    overflow: 'hidden',
+    flex: 1
+  }}>
+    <View style={{
+      width: `${score}%`,
+      height: '100%',
+      backgroundColor: score > 80 ? T.success : score > 60 ? T.warning : T.error
+    }} />
+  </View>
+);

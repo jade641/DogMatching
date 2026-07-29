@@ -1,12 +1,12 @@
 import { ChevronRight, Eye, MapPin, Send, Sparkles } from "lucide-react-native";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import {
-    Btn,
-    FONT,
-    MOCK_DOGS,
-    ScoreBar,
-    T,
-    VeriBadge,
+  Btn,
+  FONT,
+  MOCK_DOGS,
+  ScoreBar,
+  T,
+  VeriBadge,
 } from "../contexts/AppContext";
 
 export type RankedDog = {
@@ -56,7 +56,7 @@ function FloatingMatchCard({
     >
       <View style={{ position: "relative" }}>
         <Image
-          source={{ uri: dog.img }}
+          source={{ uri: dog.images?.[0] }}
           style={{ width: "100%", height: 200 }}
           resizeMode="cover"
         />
@@ -87,7 +87,7 @@ function FloatingMatchCard({
           </Text>
         </View>
         <View style={{ position: "absolute", right: 14, top: 14 }}>
-          <VeriBadge verified={dog.verified} tier={dog.tier} />
+          <VeriBadge tier={dog.verificationTier} />
         </View>
       </View>
 
@@ -118,7 +118,7 @@ function FloatingMatchCard({
           <View style={{ alignItems: "flex-end" }}>
             <Text style={{ fontSize: 12, color: T.medium }}>Owner</Text>
             <Text style={{ fontSize: 13, fontWeight: "700", color: T.dark }}>
-              {dog.ownerAvatar}
+              {dog.owner.name.charAt(0)}
             </Text>
           </View>
         </View>
@@ -151,7 +151,7 @@ function FloatingMatchCard({
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
-              {dog.ownerAvatar}
+              {dog.owner.name.charAt(0)}
             </Text>
           </View>
           <View
@@ -163,11 +163,11 @@ function FloatingMatchCard({
             }}
           >
             <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.ownerName} •
+              {dog.owner.name} •
             </Text>
             <MapPin size={10} color={T.medium} strokeWidth={2} />
             <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.ownerLocation.split(",")[0]}
+              {dog.owner.location.split(",")[0]}
             </Text>
           </View>
         </View>
