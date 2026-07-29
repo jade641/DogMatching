@@ -546,7 +546,14 @@ export function DogProfile() {
 
 /* ── Owner Profile ─────────────────────────────────────────────── */
 export function OwnerProfile() {
-  const { navigate, goBack } = useV3();
+  const { navigate, goBack, setUser } = useV3();
+
+  const handleLogout = () => {
+    // Clear user data
+    setUser(null);
+    // Navigate to login screen
+    navigate("login");
+  };
 
   const settings = [
     { Icon: Bell, t: "Notification Preferences", s: "notifications" as const },
@@ -895,6 +902,7 @@ export function OwnerProfile() {
               </TouchableOpacity>
             ))}
             <TouchableOpacity
+              onPress={handleLogout}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
