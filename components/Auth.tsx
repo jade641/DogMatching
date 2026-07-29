@@ -215,7 +215,7 @@ export function Register() {
         onPress={() => navigate("onboarding")}
         style={styles.backButton}
       >
-        <Text style={styles.backButtonText}>← Back</Text>
+        <Text style={styles.backButtonText}> </Text>
       </TouchableOpacity>
 
       <View style={styles.authHeader}>
