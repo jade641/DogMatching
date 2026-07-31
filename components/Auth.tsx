@@ -494,7 +494,7 @@ export function Login() {
 
           <TouchableOpacity
             onPress={() => handleSocialLogin('Facebook')}
-            style={[styles.socialButton, { backgroundColor: 'rgba(0, 85, 255, 0.11)' }, { borderColor: 'rgba(0, 86, 255, 1)' }, { borderWidth: 2 }]}
+            style={[styles.socialButton, { backgroundColor: 'rgba(0, 85, 255, 0.18)' }]}
           >
             <Text style={[styles.socialButtonText, { fontFamily: FONT }, { color: 'rgba(0, 86, 255, 1)' }]}>
               Continue with Facebook

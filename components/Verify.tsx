@@ -150,7 +150,7 @@ export function VerifyUpload() {
               fontFamily: FONT,
             }}
           >
-            Verify Your Dog's Profile
+            Verify Your Dog
           </Text>
         </View>
       </View>

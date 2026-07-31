@@ -162,7 +162,7 @@ export function ConversationScreen() {
                 fontFamily: FONT,
               }}
             >
-              Owner-to-Owner Chat
+              Chat
             </Text>
             <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
               Discuss the pairing, schedule, and next steps.
