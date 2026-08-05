@@ -98,14 +98,14 @@ interface EnhancedAppState extends AppState {
 }
 
 const initialState: EnhancedAppState = {
-  screen: "landing",
+  screen: "landing" as Screen,
   selectedDog: null,
   currentUser: null,
   isAuthenticated: false,
   matchResults: [],
   conversations: [],
   notifications: [],
-  history: [],
+  history: ["landing"],
   loadingStates: {},
   preferences: {
     notifications: true,

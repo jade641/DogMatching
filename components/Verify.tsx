@@ -1,28 +1,28 @@
 import {
-  ArrowLeft,
-  Award,
-  Camera,
-  CheckCircle,
-  Clock,
-  Dna,
-  FileCheck,
-  FolderOpen,
-  RotateCcw,
-  Search,
-  Shield,
-  Star,
-  Stethoscope,
-  Syringe,
-  Upload,
-  XCircle,
+    ArrowLeft,
+    Award,
+    Camera,
+    CheckCircle,
+    Clock,
+    Dna,
+    FileCheck,
+    FolderOpen,
+    RotateCcw,
+    Search,
+    Shield,
+    Star,
+    Stethoscope,
+    Syringe,
+    Upload,
+    XCircle,
 } from "lucide-react-native";
 import { useState } from "react";
 import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { FONT, MOCK_VERIFIERS, T, useV3 } from "../contexts/AppContext";
 
@@ -67,7 +67,7 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
                   color: i < step ? "#fff" : T.medium,
                 }}
               >
-                ●
+                {i + 1}
               </Text>
             </View>
           ))}

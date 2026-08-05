@@ -1212,7 +1212,7 @@ export function SendRequest() {
           </View>
         </View>
         <TouchableOpacity
-          onPress={() => navigate("home")}
+          onPress={() => navigate("conversation", dog)}
           style={{
             width: "100%",
             paddingVertical: 14,
