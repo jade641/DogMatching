@@ -1,45 +1,47 @@
 import {
-  ArrowLeft,
-  Award,
-  Bell,
-  Calendar,
-  Check,
-  ChevronRight,
-  Eye,
-  FileText,
-  Heart,
-  MapPin,
-  Palette,
-  PawPrint,
-  RefreshCw,
-  Ruler,
-  Search,
-  Send,
-  Settings,
-  Sparkles,
-  Star,
-  Stethoscope,
-  Syringe,
-  TrendingUp,
+    ArrowLeft,
+    Award,
+    Bell,
+    Calendar,
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Eye,
+    FileText,
+    Heart,
+    MapPin,
+    Palette,
+    PawPrint,
+    RefreshCw,
+    Ruler,
+    Search,
+    Send,
+    Settings,
+    Sparkles,
+    Star,
+    Stethoscope,
+    Syringe,
+    TrendingUp,
+    X,
 } from "lucide-react-native";
-import { ComponentType, useState } from "react";
+import { ComponentType, useRef, useState } from "react";
 import {
-  Image,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Image,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import {
-  Btn,
-  Chip,
-  FONT,
-  MOCK_DOGS,
-  ScoreBar,
-  T,
-  useV3,
-  VeriBadge,
+    Btn,
+    Chip,
+    FONT,
+    MOCK_DOGS,
+    ScoreBar,
+    T,
+    useV3,
+    VeriBadge,
 } from "../contexts/AppContext";
 import { FloatingMatchResults, RankedDog } from "./FloatingMatchResults";
 
@@ -48,6 +50,319 @@ type FilterChipConfig = {
   active: boolean;
   Icon: ComponentType<any>;
 };
+
+/* ── Color Options ────────────────────────────────────────────── */
+type ColorOption = {
+  name: string;
+  hex: string;
+  searchTerms: string[];
+};
+
+const COLOR_OPTIONS: ColorOption[] = [
+  { name: "Black", hex: "#1A1A1A", searchTerms: ["black"] },
+  { name: "White", hex: "#FFFFFF", searchTerms: ["white"] },
+  { name: "Brown / Chocolate", hex: "#5C3A21", searchTerms: ["brown", "chocolate"] },
+  { name: "Liver", hex: "#4A2C2A", searchTerms: ["liver"] },
+  { name: "Red", hex: "#A0442A", searchTerms: ["red"] },
+  { name: "Mahogany / Rust", hex: "#8B3A1E", searchTerms: ["mahogany", "rust"] },
+  { name: "Fawn", hex: "#D9B382", searchTerms: ["fawn"] },
+  { name: "Cream", hex: "#F3E5C0", searchTerms: ["cream"] },
+  { name: "Buff", hex: "#E0C08A", searchTerms: ["buff"] },
+  { name: "Yellow", hex: "#E6C35C", searchTerms: ["yellow"] },
+  { name: "Golden", hex: "#D99A2B", searchTerms: ["golden"] },
+  { name: "Apricot", hex: "#F0B27A", searchTerms: ["apricot"] },
+  { name: "Tan", hex: "#C9A27A", searchTerms: ["tan"] },
+  { name: "Wheaten", hex: "#E8D3A2", searchTerms: ["wheaten"] },
+  { name: "Orange", hex: "#E9822B", searchTerms: ["orange"] },
+  { name: "Gray", hex: "#8A8D91", searchTerms: ["gray"] },
+  { name: "Silver", hex: "#C0C4C8", searchTerms: ["silver"] },
+  { name: "Charcoal", hex: "#36393D", searchTerms: ["charcoal"] },
+  { name: "Blue", hex: "#5B6F86", searchTerms: ["blue"] },
+  { name: "Lilac / Isabella", hex: "#A99A9F", searchTerms: ["lilac", "isabella"] },
+  { name: "Champagne", hex: "#EBD9B4", searchTerms: ["champagne"] },
+  { name: "Mixed / Multiple colors", hex: "gradient", searchTerms: ["mixed", "multiple", "colors"] },
+  { name: "Other", hex: "other", searchTerms: ["other"] },
+];
+
+/* ── Color Swatch Component ──────────────────────────────────── */
+function ColorSwatch({ hex, size = 16 }: { hex: string; size?: number }) {
+  if (hex === "gradient") {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          overflow: "hidden",
+        }}
+      >
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          <View style={{ flex: 1, backgroundColor: "#8B4513" }} />
+          <View style={{ flex: 1, backgroundColor: "#FFFFFF" }} />
+        </View>
+      </View>
+    );
+  }
+
+  if (hex === "other") {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 1.5,
+          borderColor: T.medium,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontSize: size * 0.6, color: T.medium, fontWeight: "600" }}>?</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: hex,
+        borderWidth: hex === "#FFFFFF" ? 1 : 0,
+        borderColor: T.border,
+      }}
+    />
+  );
+}
+
+/* ── Color Combobox Component ────────────────────────────────── */
+function ColorCombobox({
+  value,
+  onChange,
+  onOtherTextChange,
+  otherText,
+  hasError,
+}: {
+  value: string;
+  onChange: (value: string, otherText?: string) => void;
+  onOtherTextChange: (text: string) => void;
+  otherText: string;
+  hasError?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const inputRef = useRef<TextInput>(null);
+
+  const selectedOption = COLOR_OPTIONS.find(opt => opt.name === value);
+
+  const filteredOptions = COLOR_OPTIONS.filter((option) => {
+    if (!searchText.trim()) return true;
+    const query = searchText.toLowerCase();
+    return option.searchTerms.some(term => term.includes(query)) ||
+           option.name.toLowerCase().includes(query);
+  });
+
+  const handleSelect = (option: ColorOption) => {
+    onChange(option.name, "");
+    setSearchText("");
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    onChange("", "");
+    setSearchText("");
+    onOtherTextChange("");
+    setIsOpen(false);
+  };
+
+  const displayText = value || searchText || "";
+  const placeholder = "Select or search color";
+
+  return (
+    <View style={{ gap: 8, position: "relative", zIndex: isOpen ? 1000 : 1, marginBottom: isOpen ? 290 : 0 }}>
+      {isOpen && (
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setIsOpen(false)}
+          style={{
+            position: "absolute",
+            top: -1000,
+            left: -1000,
+            right: -1000,
+            bottom: -1000,
+            zIndex: 999,
+          }}
+        />
+      )}
+      
+      <View
+        style={{
+          borderRadius: 16,
+          paddingHorizontal: 14,
+          height: 52,
+          backgroundColor: T.bg,
+          borderWidth: 1,
+          borderColor: hasError ? T.coral : isOpen ? T.teal : T.border,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+        }}
+        role="combobox"
+        aria-expanded={isOpen}
+        aria-controls="color-listbox"
+      >
+        {selectedOption && !isOpen && (
+          <ColorSwatch hex={selectedOption.hex} size={20} />
+        )}
+        <TextInput
+          ref={inputRef}
+          value={isOpen ? searchText : displayText}
+          onChangeText={(text) => {
+            setSearchText(text);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder={placeholder}
+          placeholderTextColor={T.medium}
+          style={{
+            flex: 1,
+            fontSize: 14,
+            color: T.dark,
+            fontFamily: FONT,
+          }}
+        />
+        {value ? (
+          <TouchableOpacity
+            onPress={handleClear}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: T.medium,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <X size={12} color="#fff" strokeWidth={2.5} />
+          </TouchableOpacity>
+        ) : (
+          <ChevronDown size={18} color={T.medium} strokeWidth={1.5} />
+        )}
+      </View>
+
+      {isOpen && (
+        <View
+          style={{
+            position: "absolute",
+            top: 60,
+            left: 0,
+            right: 0,
+            backgroundColor: T.white,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: T.border,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 8,
+            maxHeight: 280,
+            overflow: "hidden",
+            zIndex: 1001,
+          }}
+          id="color-listbox"
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ padding: 4 }}
+            nestedScrollEnabled
+          >
+            {filteredOptions.length === 0 ? (
+              <View
+                style={{
+                  paddingVertical: 20,
+                  paddingHorizontal: 16,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ fontSize: 14, color: T.medium, textAlign: "center" }}>
+                  No matching color found
+                </Text>
+              </View>
+            ) : (
+              filteredOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.name}
+                  onPress={() => handleSelect(option)}
+                  role="option"
+                  aria-selected={value === option.name}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    minHeight: 44,
+                    borderRadius: 12,
+                    backgroundColor: value === option.name ? T.tealLight : "transparent",
+                  }}
+                >
+                  <ColorSwatch hex={option.hex} size={20} />
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 14,
+                      color: T.dark,
+                      fontWeight: value === option.name ? "600" : "400",
+                      fontFamily: FONT,
+                    }}
+                  >
+                    {option.name}
+                  </Text>
+                  {value === option.name && (
+                    <Check size={16} color={T.teal} strokeWidth={2.5} />
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      )}
+
+      {value === "Other" && (
+        <View
+          style={{
+            borderRadius: 16,
+            paddingHorizontal: 14,
+            height: 52,
+            backgroundColor: T.bg,
+            borderWidth: 1,
+            borderColor: T.border,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginTop: 4,
+          }}
+        >
+          <TextInput
+            value={otherText}
+            onChangeText={onOtherTextChange}
+            placeholder="e.g., brindle-gray mix"
+            placeholderTextColor={T.medium}
+            style={{
+              flex: 1,
+              fontSize: 14,
+              color: T.dark,
+              fontFamily: FONT,
+            }}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
 
 /* ── Match Card ───────────────────────────────────────────────── */
 export function MatchCard({
@@ -910,6 +1225,7 @@ export function MatchScreen() {
 type FilterPrefs = {
   breed: string;
   color: string;
+  colorOther: string;
   size: string;
   temperament: string;
   sex: string;
@@ -1040,6 +1356,7 @@ export function FilterScreen() {
   const [prefs, setPrefs] = useState<FilterPrefs>({
     breed: "",
     color: "",
+    colorOther: "",
     size: "Any",
     temperament: "Any",
     sex: "Any",
@@ -1055,6 +1372,14 @@ export function FilterScreen() {
     setPrefs((current) => ({ ...current, [key]: value }));
   };
 
+  const handleColorChange = (colorValue: string, otherText?: string) => {
+    setPrefs((current) => ({
+      ...current,
+      color: colorValue,
+      colorOther: otherText || "",
+    }));
+  };
+
   const handleGenerate = () => {
     setShowResults(true);
     if (!selectedDogId && rankedDogs[0]) {
@@ -1066,6 +1391,7 @@ export function FilterScreen() {
     setPrefs({
       breed: "",
       color: "",
+      colorOther: "",
       size: "Any",
       temperament: "Any",
       sex: "Any",
@@ -1298,32 +1624,12 @@ export function FilterScreen() {
                   Color
                 </Text>
               </View>
-              <View
-                style={{
-                  borderRadius: 16,
-                  paddingHorizontal: 14,
-                  height: 52,
-                  backgroundColor: T.bg,
-                  borderWidth: 1,
-                  borderColor: T.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <TextInput
-                  value={prefs.color}
-                  onChangeText={(text) => updatePref("color", text)}
-                  placeholder="Example: white, black, golden, brown"
-                  placeholderTextColor={T.medium}
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    color: T.dark,
-                    fontFamily: FONT,
-                  }}
-                />
-              </View>
+              <ColorCombobox
+                value={prefs.color}
+                onChange={handleColorChange}
+                onOtherTextChange={(text) => updatePref("colorOther", text)}
+                otherText={prefs.colorOther}
+              />
             </View>
 
             <FilterChipRow
