@@ -380,23 +380,47 @@ export function Login() {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Mock successful login
-      const user = {
-        id: "1",
-        name: "Juan dela Cruz",
-        avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=JC",
-        location: "Davao City",
-        memberSince: "2023-01-15",
-        reputation: 4.8,
-        totalMatches: 12,
-        successfulBreedings: 8,
-        verificationStatus: 'verified' as const,
-        badges: []
-      };
+      // Check if veterinarian login
+      if (email === 'vet@pawmatch.com' && password === 'vet123') {
+        // Veterinarian login
+        const vet = {
+          id: "vet1",
+          name: "Dr. Maria Santos",
+          avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=MS",
+          location: "Davao City",
+          memberSince: "2020-01-01",
+          reputation: 4.9,
+          totalMatches: 0,
+          successfulBreedings: 0,
+          verificationStatus: 'verified' as const,
+          badges: [],
+          role: 'veterinarian' as const,
+          email: 'vet@pawmatch.com',
+        };
 
-      setUser(user);
-      setLoading('login', 'success');
-      navigate("home");
+        setUser(vet);
+        setLoading('login', 'success');
+        navigate("vet-dashboard");
+      } else {
+        // Regular user login
+        const user = {
+          id: "1",
+          name: "Juan dela Cruz",
+          avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=JC",
+          location: "Davao City",
+          memberSince: "2023-01-15",
+          reputation: 4.8,
+          totalMatches: 12,
+          successfulBreedings: 8,
+          verificationStatus: 'verified' as const,
+          badges: [],
+          role: 'breeder' as const,
+        };
+
+        setUser(user);
+        setLoading('login', 'success');
+        navigate("home");
+      }
     } catch (error) {
       setLoading('login', 'error');
       Alert.alert('Login Failed', 'Invalid email or password.');
@@ -513,17 +537,30 @@ export function Login() {
 
         <View style={styles.demoSection}>
           <Text style={[styles.demoTitle, { fontFamily: FONT }]}>Demo Access</Text>
-          <TouchableOpacity
-            onPress={() => {
-              setEmail('demo@pawmatch.com');
-              setPassword('demo123');
-            }}
-            style={styles.demoButton}
-          >
-            <Text style={[styles.demoButtonText, { fontFamily: FONT }]}>
-              Fill Demo Credentials
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => {
+                setEmail('demo@pawmatch.com');
+                setPassword('demo123');
+              }}
+              style={[styles.demoButton, { flex: 1 }]}
+            >
+              <Text style={[styles.demoButtonText, { fontFamily: FONT }]}>
+                Dog Breeder
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setEmail('vet@pawmatch.com');
+                setPassword('vet123');
+              }}
+              style={[styles.demoButton, { flex: 1, backgroundColor: T.accentLight }]}
+            >
+              <Text style={[styles.demoButtonText, { fontFamily: FONT, color: T.accent }]}>
+                Veterinarian
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </ScrollView>

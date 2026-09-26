@@ -30,6 +30,18 @@ export interface Owner {
     successfulBreedings: number;
     verificationStatus: 'verified' | 'pending' | 'unverified';
     badges: Badge[];
+    role?: 'breeder' | 'veterinarian' | 'admin';
+    email?: string;
+}
+
+export interface Veterinarian extends Owner {
+    role: 'veterinarian';
+    licenseNumber: string;
+    specialties: string[];
+    clinic: string;
+    yearsOfExperience: number;
+    consultationFee?: number;
+    availableSchedule?: string[];
 }
 
 export interface HealthRecord {
@@ -40,6 +52,47 @@ export interface HealthRecord {
     verifiedBy?: string;
     documentUrl?: string;
     status: 'verified' | 'pending' | 'expired';
+}
+
+export interface VeterinaryRequest {
+    id: string;
+    dogId: string;
+    dog: Dog;
+    ownerId: string;
+    owner: Owner;
+    veterinarianId?: string;
+    veterinarian?: Veterinarian;
+    requestDate: string;
+    preferredDate?: string;
+    reason: string;
+    status: 'pending' | 'approved' | 'scheduled' | 'in-consultation' | 'completed' | 'cancelled';
+    notes?: string;
+}
+
+export interface VeterinaryExamination {
+    id: string;
+    requestId: string;
+    dogId: string;
+    dog: Dog;
+    veterinarianId: string;
+    veterinarian: Veterinarian;
+    ownerId: string;
+    owner: Owner;
+    examinationDate: string;
+    reasonForVisit: string;
+    weight?: number;
+    temperature?: number;
+    physicalExamination?: string;
+    findings: string;
+    diagnosis: string;
+    treatment?: string;
+    medication?: string;
+    vaccination?: string;
+    recommendations: string;
+    followUpDate?: string;
+    veterinarianNotes?: string;
+    status: 'scheduled' | 'in-progress' | 'completed';
+    attachments?: string[];
 }
 
 export interface Badge {
@@ -140,7 +193,14 @@ export type Screen =
     | 'empty-notif'
     | 'empty-matches'
     | 'conversation'
-    | 'settings';
+    | 'settings'
+    | 'vet-dashboard'
+    | 'vet-requests'
+    | 'vet-examination'
+    | 'vet-records'
+    | 'vet-dog-profile'
+    | 'request-vet-checkup'
+    | 'vet-request-detail';
 
 export interface AppState {
     screen: Screen;

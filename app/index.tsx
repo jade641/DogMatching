@@ -1,24 +1,26 @@
 import { Login, Onboarding, Register, Splash } from "../components/Auth";
 import {
-  EmptyMatches,
-  EmptyNotifications,
-  EmptyVerify,
-  EventsScreen,
-  NotificationsScreen,
-  ReputationScreen,
-  SettingsScreen,
+    EmptyMatches,
+    EmptyNotifications,
+    EmptyVerify,
+    EventsScreen,
+    NotificationsScreen,
+    ReputationScreen,
+    SettingsScreen,
 } from "../components/Community";
 import { ConversationScreen } from "../components/Conversation";
 import { FilterScreen, HomeScreen, MatchScreen } from "../components/Home";
 import {
-  AddDog,
-  DogProfile,
-  MatchProfileScreen,
-  OwnerProfile,
-  RequestReceived,
-  SendRequest
+    AddDog,
+    DogProfile,
+    MatchProfileScreen,
+    OwnerProfile,
+    RequestReceived,
+    SendRequest
 } from "../components/Profile";
 import { VerifyChoose, VerifyStatus, VerifyUpload } from "../components/Verify";
+import { VetDashboard, VetRequestDetail, VetRequests } from "../components/Veterinarian";
+import { VetExamination, VetRecords } from "../components/VeterinarianExam";
 import { useV3 } from "../contexts/AppContext";
 import { Shell } from "../navigation/Shell";
 import Landing from "./Landing";
@@ -58,6 +60,12 @@ function PageRenderer() {
     "empty-matches": <EmptyMatches />,
     "empty-notif": <EmptyNotifications />,
     "empty-verify": <EmptyVerify />,
+    // VETERINARIAN SCREENS (NO BOTTOM NAV)
+    "vet-dashboard": <VetDashboard />,
+    "vet-requests": <VetRequests />,
+    "vet-request-detail": <VetRequestDetail />,
+    "vet-examination": <VetExamination />,
+    "vet-records": <VetRecords />,
   };
 
   // Get the current page, default to landing if not found

@@ -46,6 +46,13 @@ const SCREENS_WITHOUT_NAV: Screen[] = [
   "onboarding",
   "register",
   "login",
+  "vet-dashboard",
+  "vet-requests",
+  "vet-examination",
+  "vet-records",
+  "vet-dog-profile",
+  "vet-request-detail",
+  "request-vet-checkup",
 ];
 
 const SCREENS_WITH_NAV: Screen[] = [
