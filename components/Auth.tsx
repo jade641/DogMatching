@@ -512,7 +512,7 @@ export function Login() {
         <View style={styles.socialLogins}>
           <TouchableOpacity
             onPress={() => handleSocialLogin('Google')}
-            style={[styles.socialButton, { backgroundColor: '#ffffffff' }]}
+            style={[styles.socialButton, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(255, 99, 27, 0.3)' }]}
           >
             <Text style={[styles.socialButtonText, { fontFamily: FONT }, { color: '#ff631bff' }]}>
               Continue with Google
@@ -521,7 +521,7 @@ export function Login() {
 
           <TouchableOpacity
             onPress={() => handleSocialLogin('Facebook')}
-            style={[styles.socialButton, { backgroundColor: 'rgba(0, 85, 255, 0.18)' }]}
+            style={[styles.socialButton, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(0, 86, 255, 0.3)' }]}
           >
             <Text style={[styles.socialButtonText, { fontFamily: FONT }, { color: 'rgba(0, 86, 255, 1)' }]}>
               Continue with Facebook
