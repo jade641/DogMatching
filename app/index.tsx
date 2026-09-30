@@ -1,4 +1,4 @@
-import { Login, Onboarding, Register, Splash } from "../components/Auth";
+import { ForgotPassword, ForgotPasswordSent, Login, Onboarding, Register, ResetPassword, Splash } from "../components/Auth";
 import {
     EmptyMatches,
     EmptyNotifications,
@@ -35,6 +35,9 @@ function PageRenderer() {
     onboarding: <Onboarding />,
     register: <Register />,
     login: <Login />,
+    "forgot-password": <ForgotPassword />,
+    "forgot-password-sent": <ForgotPasswordSent />,
+    "reset-password": <ResetPassword />,
     // MAIN SCREENS (WITH BOTTOM NAV)
     home: <HomeScreen />,
     match: <MatchScreen />,

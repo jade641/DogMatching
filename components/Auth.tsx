@@ -490,7 +490,10 @@ export function Login() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.forgotPassword}>
+        <TouchableOpacity 
+          onPress={() => navigate("forgot-password")}
+          style={styles.forgotPassword}
+        >
           <Text style={[styles.forgotPasswordText, { fontFamily: FONT }]}>
             Forgot Password?
           </Text>
@@ -791,3 +794,362 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+/* ── Forgot Password ──────────────────────────────────────────── */
+export function ForgotPassword() {
+  const { navigate, goBack, setLoading, isLoading } = useV3();
+  const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+
+  const validateEmail = (email: string) => {
+    const emailRule = FormValidator.email();
+    const requiredRule = FormValidator.required('Email is required');
+
+    let error = FormValidator.validateField(email, [requiredRule]);
+    if (!error) {
+      error = FormValidator.validateField(email, [emailRule]);
+    }
+
+    setEmailError(error || '');
+    return !error;
+  };
+
+  const handleSendResetLink = async () => {
+    if (!validateEmail(email)) {
+      return;
+    }
+
+    setLoading('forgot-password', 'loading');
+
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      setLoading('forgot-password', 'success');
+      navigate("forgot-password-sent");
+    } catch (error) {
+      setLoading('forgot-password', 'error');
+      Alert.alert('Error', 'Failed to send reset link. Please try again.');
+    }
+  };
+
+  if (isLoading('forgot-password')) {
+    return (
+      <View style={styles.container}>
+        <LoadingSpinner message="Sending reset link..." />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
+      <TouchableOpacity
+        onPress={goBack}
+        style={styles.backButton}
+      >
+        <Text style={[styles.backButtonText, { fontFamily: FONT }]}>← Back</Text>
+      </TouchableOpacity>
+
+      <View style={styles.authHeader}>
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: T.primaryLight,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 16,
+          }}
+        >
+          <PawPrint size={40} color={T.primary} />
+        </View>
+        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
+          Forgot Password?
+        </Text>
+        <Text style={[styles.authSubtitle, { fontFamily: FONT, textAlign: 'center', paddingHorizontal: 20 }]}>
+          No worries! Enter your email address and we'll send you a link to reset your password.
+        </Text>
+      </View>
+
+      <View style={styles.authForm}>
+        <Field
+          label="Email Address"
+          value={email}
+          onChange={setEmail}
+          onBlur={() => validateEmail(email)}
+          placeholder="Enter your email"
+          autoCapitalize="none"
+          error={emailError}
+        />
+
+        <Btn onClick={handleSendResetLink} size="large">
+          Send Reset Link
+        </Btn>
+
+        <TouchableOpacity
+          onPress={() => navigate("login")}
+          style={styles.switchAuthMode}
+        >
+          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
+            Remember your password? <Text style={styles.switchAuthLink}>Sign In</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
+/* ── Forgot Password Sent ─────────────────────────────────────── */
+export function ForgotPasswordSent() {
+  const { navigate } = useV3();
+
+  return (
+    <View style={[styles.container, { padding: 20, justifyContent: 'center' }]}>
+      <View style={styles.authHeader}>
+        <View
+          style={{
+            width: 100,
+            height: 100,
+            borderRadius: 50,
+            backgroundColor: T.primaryLight,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+          }}
+        >
+          <View
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              backgroundColor: T.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 32 }}>📧</Text>
+          </View>
+        </View>
+        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
+          Check Your Email
+        </Text>
+        <Text style={[styles.authSubtitle, { fontFamily: FONT, textAlign: 'center', paddingHorizontal: 20, lineHeight: 24 }]}>
+          We've sent a password reset link to your email address. Please check your inbox and follow the instructions to reset your password.
+        </Text>
+      </View>
+
+      <View style={{ gap: 16, marginTop: 32 }}>
+        <Btn onClick={() => navigate("login")} size="large">
+          Back to Sign In
+        </Btn>
+
+        <TouchableOpacity
+          onPress={() => navigate("forgot-password")}
+          style={{
+            paddingVertical: 12,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
+            Didn't receive the email? <Text style={styles.switchAuthLink}>Resend</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View
+        style={{
+          marginTop: 40,
+          padding: 16,
+          backgroundColor: T.bg,
+          borderRadius: 12,
+          borderLeftWidth: 4,
+          borderLeftColor: T.primary,
+        }}
+      >
+        <Text style={{ fontSize: 14, color: T.dark, fontWeight: '600', marginBottom: 8 }}>
+          💡 Tip
+        </Text>
+        <Text style={{ fontSize: 12, color: T.medium, lineHeight: 18 }}>
+          If you don't see the email, check your spam or junk folder. The reset link will expire in 24 hours for security reasons.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/* ── Reset Password ───────────────────────────────────────────── */
+export function ResetPassword() {
+  const { navigate, setLoading, isLoading } = useV3();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+
+  const validatePassword = (password: string) => {
+    const minLengthRule = FormValidator.minLength(8);
+    const requiredRule = FormValidator.required('Password is required');
+
+    let error = FormValidator.validateField(password, [requiredRule]);
+    if (!error) {
+      error = FormValidator.validateField(password, [minLengthRule]);
+    }
+
+    setPasswordError(error || '');
+    return !error;
+  };
+
+  const validateConfirmPassword = (confirmPassword: string, password: string) => {
+    const requiredRule = FormValidator.required('Please confirm your password');
+    
+    let error = FormValidator.validateField(confirmPassword, [requiredRule]);
+    if (!error && confirmPassword !== password) {
+      error = 'Passwords do not match';
+    }
+
+    setConfirmPasswordError(error || '');
+    return !error;
+  };
+
+  const handleResetPassword = async () => {
+    const isPasswordValid = validatePassword(password);
+    const isConfirmValid = validateConfirmPassword(confirmPassword, password);
+
+    if (!isPasswordValid || !isConfirmValid) {
+      return;
+    }
+
+    setLoading('reset-password', 'loading');
+
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      setLoading('reset-password', 'success');
+      Alert.alert(
+        'Success!',
+        'Your password has been reset successfully. You can now sign in with your new password.',
+        [
+          {
+            text: 'Sign In',
+            onPress: () => navigate('login'),
+          },
+        ]
+      );
+    } catch (error) {
+      setLoading('reset-password', 'error');
+      Alert.alert('Error', 'Failed to reset password. Please try again.');
+    }
+  };
+
+  if (isLoading('reset-password')) {
+    return (
+      <View style={styles.container}>
+        <LoadingSpinner message="Resetting your password..." />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
+      <View style={styles.authHeader}>
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: T.primaryLight,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 16,
+          }}
+        >
+          <PawPrint size={40} color={T.primary} />
+        </View>
+        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
+          Reset Password
+        </Text>
+        <Text style={[styles.authSubtitle, { fontFamily: FONT, textAlign: 'center', paddingHorizontal: 20 }]}>
+          Create a new password for your account. Make sure it's strong and secure.
+        </Text>
+      </View>
+
+      <View style={styles.authForm}>
+        <View style={{ position: 'relative' }}>
+          <Field
+            label="New Password"
+            value={password}
+            onChange={setPassword}
+            onBlur={() => validatePassword(password)}
+            placeholder="Enter your new password"
+            secure={!showPassword}
+            error={passwordError}
+          />
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.passwordToggle}
+          >
+            {showPassword ?
+              <EyeOff size={20} color={T.medium} /> :
+              <Eye size={20} color={T.medium} />
+            }
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ position: 'relative' }}>
+          <Field
+            label="Confirm Password"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            onBlur={() => validateConfirmPassword(confirmPassword, password)}
+            placeholder="Confirm your new password"
+            secure={!showConfirmPassword}
+            error={confirmPasswordError}
+          />
+          <TouchableOpacity
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            style={styles.passwordToggle}
+          >
+            {showConfirmPassword ?
+              <EyeOff size={20} color={T.medium} /> :
+              <Eye size={20} color={T.medium} />
+            }
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={{
+            padding: 12,
+            backgroundColor: T.primaryLight,
+            borderRadius: 8,
+            marginBottom: 8,
+          }}
+        >
+          <Text style={{ fontSize: 12, color: T.dark, fontWeight: '600', marginBottom: 4 }}>
+            Password Requirements:
+          </Text>
+          <Text style={{ fontSize: 11, color: T.medium, lineHeight: 16 }}>
+            • At least 8 characters long{'\n'}
+            • Mix of uppercase and lowercase letters{'\n'}
+            • Include numbers and special characters
+          </Text>
+        </View>
+
+        <Btn onClick={handleResetPassword} size="large">
+          Reset Password
+        </Btn>
+
+        <TouchableOpacity
+          onPress={() => navigate("login")}
+          style={styles.switchAuthMode}
+        >
+          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
+            Remember your password? <Text style={styles.switchAuthLink}>Sign In</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
