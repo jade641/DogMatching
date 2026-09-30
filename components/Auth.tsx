@@ -1,6 +1,6 @@
 import { Eye, EyeOff, Heart, PawPrint, ShieldCheck, Users } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Btn, Field, FONT, T, useV3 } from "../contexts/AppContext";
 import { RegistrationForm } from "../types";
 import { FormValidator, registrationSchema, useFormValidation } from "../utils/validation";
@@ -512,8 +512,22 @@ export function Login() {
         <View style={styles.socialLogins}>
           <TouchableOpacity
             onPress={() => handleSocialLogin('Google')}
-            style={[styles.socialButton, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(255, 99, 27, 0.3)' }]}
+            style={[styles.socialButton, { 
+              backgroundColor: '#ffffff', 
+              borderWidth: 1, 
+              borderColor: 'rgba(255, 99, 27, 0.3)',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+            }]}
+            activeOpacity={0.7}
           >
+            <Image
+              source={{ uri: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cGF0aCBmaWxsPSIjNDI4NUY0IiBkPSJNMjIuNTYgMTIuMjVjMC0uNzgtLjA3LTEuNTMtLjItMi4yNUgxMnY0LjI2aDUuOTJjLS4yNSAxLjMxLTEuMDEgMi40MS0yLjE2IDMuMTZ2Mi43aDMuNDljMi4wNC0xLjg4IDMuMzEtNC42NCAzLjMxLTcuOTd6Ii8+CiAgPHBhdGggZmlsbD0iIzM0QTg1MyIgZD0iTTEyIDIzYzIuOTcgMCA1LjQ2LS45OCA3LjI4LTIuNjZsLTMuNDktMi43MWMtLjk4LjY2LTIuMjMgMS4wNi0zLjc5IDEuMDYtMi45MSAwLTUuMzgtMS45Ny02LjI2LTQuNjJIMiIvPgo8L3N2Zz4=' }}
+              style={{ width: 24, height: 24 }}
+              resizeMode="contain"
+            />
             <Text style={[styles.socialButtonText, { fontFamily: FONT }, { color: '#ff631bff' }]}>
               Continue with Google
             </Text>
@@ -521,8 +535,22 @@ export function Login() {
 
           <TouchableOpacity
             onPress={() => handleSocialLogin('Facebook')}
-            style={[styles.socialButton, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(0, 86, 255, 0.3)' }]}
+            style={[styles.socialButton, { 
+              backgroundColor: '#ffffff', 
+              borderWidth: 1, 
+              borderColor: 'rgba(0, 86, 255, 0.3)',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+            }]}
+            activeOpacity={0.7}
           >
+            <Image
+              source={{ uri: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cGF0aCBmaWxsPSIjMTg3N0YyIiBkPSJNMjQgMTJjMC02LjYyNy01LjM3My0xMi0xMi0xMlMwIDUuMzczIDAgMTJjMCA1Ljk5IDQuMzg4IDEwLjk1NCAxMC4xMjUgMTEuODU0di04LjM4NUg3LjA3OHYtMy40N2gzLjA0N1Y5LjM1NmMwLTMuMDA3IDEuNzkyLTQuNjY5IDQuNTMzLTQuNjY5IDEuMzEyIDAgMi42ODYuMjM0IDIuNjg2LjIzNHYyLjk1M0gxNS44M2MtMS40OTEgMC0xLjk1Ni45MjUtMS45NTYgMS44NzRWMTJoMy4zMjhsLS41MzIgMy40N2gtMi43OTZ2OC4zODVDMTkuNjEyIDIyLjk1NCAyNCAE3Ljk5IDI0IDEyeiIvPgo8L3N2Zz4=' }}
+              style={{ width: 24, height: 24 }}
+              resizeMode="contain"
+            />
             <Text style={[styles.socialButtonText, { fontFamily: FONT }, { color: 'rgba(0, 86, 255, 1)' }]}>
               Continue with Facebook
             </Text>
@@ -765,6 +793,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
   },
   socialButtonText: {
     color: 'white',
