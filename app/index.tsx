@@ -66,6 +66,7 @@ function PageRenderer() {
     // VETERINARIAN SCREENS (NO BOTTOM NAV)
     "vet-dashboard": <VetDashboard />,
     "vet-profile": <VetProfile />,
+    "vet-settings": <VetSettings />,
     "vet-requests": <VetRequests />,
     "vet-request-detail": <VetRequestDetail />,
     "vet-examination": <VetExamination />,

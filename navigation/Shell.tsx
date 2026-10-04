@@ -51,6 +51,7 @@ const SCREENS_WITHOUT_NAV: Screen[] = [
   "reset-password",
   "vet-dashboard",
   "vet-profile",
+  "vet-settings",
   "vet-requests",
   "vet-examination",
   "vet-records",

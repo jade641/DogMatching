@@ -199,6 +199,7 @@ export type Screen =
     | 'settings'
     | 'vet-dashboard'
     | 'vet-profile'
+    | 'vet-settings'
     | 'vet-requests'
     | 'vet-examination'
     | 'vet-records'

@@ -1,23 +1,23 @@
 import {
-    Activity,
-    ArrowLeft,
-    Calendar,
-    CheckCircle,
-    ChevronRight,
-    Clock,
-    FileText,
-    MapPin,
-    MessageSquare,
-    Stethoscope,
-    User
+  Activity,
+  ArrowLeft,
+  Calendar,
+  CheckCircle,
+  ChevronRight,
+  Clock,
+  FileText,
+  MapPin,
+  MessageSquare,
+  Stethoscope,
+  User
 } from "lucide-react-native";
 import { useState } from "react";
 import {
-    Image,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { Btn, FONT, MOCK_DOGS, T, useV3 } from "../contexts/AppContext";
 import type { VeterinaryExamination, VeterinaryRequest } from "../types";
@@ -991,14 +991,7 @@ export { MOCK_VET_EXAMINATIONS, MOCK_VET_REQUESTS };
 
 /* ── Veterinarian Profile ───────────────────────────────────── */
 export function VetProfile() {
-  const { navigate, goBack, setUser, currentUser } = useV3();
-
-  const handleLogout = () => {
-    // Clear user data
-    setUser(null);
-    // Navigate to login screen
-    navigate("login");
-  };
+  const { navigate, goBack, currentUser } = useV3();
 
   const vetInfo = {
     name: currentUser?.name || "Dr. Maria Santos",
@@ -1052,6 +1045,19 @@ export function VetProfile() {
             Veterinarian Profile
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={() => navigate("vet-settings")}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: T.bg,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Settings size={20} color={T.dark} strokeWidth={1.5} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -1406,35 +1412,228 @@ export function VetProfile() {
             </Text>
           </TouchableOpacity>
         </View>
+      </ScrollView>
+    </View>
+  );
+}
 
-        {/* Logout Button */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-          <TouchableOpacity
-            onPress={handleLogout}
+/* ── Veterinarian Settings ──────────────────────────────────── */
+export function VetSettings() {
+  const { navigate, goBack, setUser } = useV3();
+
+  const handleLogout = () => {
+    // Clear user data
+    setUser(null);
+    // Navigate to login screen
+    navigate("login");
+  };
+
+  const settingsOptions = [
+    {
+      Icon: Bell,
+      title: "Notification Preferences",
+      description: "Manage your notification settings",
+    },
+    {
+      Icon: Lock,
+      title: "Privacy & Security",
+      description: "Update password and security settings",
+    },
+    {
+      Icon: FileText,
+      title: "License & Credentials",
+      description: "View and update professional credentials",
+    },
+    {
+      Icon: HelpCircle,
+      title: "Help & Support",
+      description: "Get help or contact support",
+    },
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Header */}
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 48,
+          paddingBottom: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          backgroundColor: T.white,
+          borderBottomWidth: 1,
+          borderBottomColor: T.border,
+        }}
+      >
+        <TouchableOpacity onPress={goBack}>
+          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+          }}
+        >
+          <Settings size={18} color={T.dark} strokeWidth={1.5} />
+          <Text
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 12,
-              paddingVertical: 16,
-              borderRadius: 12,
-              backgroundColor: T.white,
-              borderWidth: 1,
-              borderColor: T.error,
+              fontSize: 16,
+              fontWeight: "700",
+              color: T.dark,
+              fontFamily: FONT,
             }}
           >
-            <User size={20} color={T.error} strokeWidth={1.5} />
-            <Text
+            Settings
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
+      >
+        {/* Settings Options */}
+        <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+          <View
+            style={{
+              borderRadius: 16,
+              overflow: "hidden",
+              backgroundColor: T.white,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            {settingsOptions.map((option, index) => (
+              <TouchableOpacity
+                key={option.title}
+                onPress={() => {
+                  // Handle navigation to specific settings
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  borderBottomWidth: index < settingsOptions.length - 1 ? 1 : 0,
+                  borderBottomColor: T.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: T.primaryLight,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <option.Icon size={20} color={T.primary} strokeWidth={1.5} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: T.dark,
+                      fontFamily: FONT,
+                    }}
+                  >
+                    {option.title}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
+                    {option.description}
+                  </Text>
+                </View>
+                <ChevronRight size={20} color={T.medium} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Account Section */}
+        <View style={{ paddingHorizontal: 20, marginTop: 32 }}>
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: "700",
+              color: T.medium,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              marginBottom: 12,
+            }}
+          >
+            Account
+          </Text>
+          <View
+            style={{
+              borderRadius: 16,
+              overflow: "hidden",
+              backgroundColor: T.white,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleLogout}
               style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: T.error,
-                fontFamily: FONT,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 16,
               }}
             >
-              Log Out
-            </Text>
-          </TouchableOpacity>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "#FFEBEE",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <LogOut size={20} color={T.error} strokeWidth={1.5} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: T.error,
+                    fontFamily: FONT,
+                  }}
+                >
+                  Log Out
+                </Text>
+                <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
+                  Sign out of your veterinarian account
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* App Version */}
+        <View style={{ paddingHorizontal: 20, marginTop: 32, alignItems: "center" }}>
+          <Text style={{ fontSize: 12, color: T.light }}>
+            PawMatch Veterinarian Portal
+          </Text>
+          <Text style={{ fontSize: 12, color: T.light, marginTop: 4 }}>
+            Version 1.0.0
+          </Text>
         </View>
       </ScrollView>
     </View>

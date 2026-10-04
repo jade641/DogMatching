@@ -3,14 +3,7 @@ import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { FONT, T, useV3 } from "../contexts/AppContext";
 
-/**
- * 🐾 3-PAGE LANDING CAROUSEL
- * 
- * Tatlong landing pages bago mag-login:
- * 1. Find Your Dog's Perfect Match �
- * 2. Verified Health Records ✓
- * 3. Connect with Confidence 🤝
- */
+
 
 const landingPages = [
   {
@@ -27,7 +20,7 @@ const landingPages = [
   },
   {
     icon: Users,
-    title: "Match with Confidence",
+    title: "Connect with Confidence",
     description:
       "Reputation pages, badges, and interaction history so you always know who you're dealing with.",
   },
@@ -69,8 +62,8 @@ export default function Landing({ onLaunch }: { onLaunch: () => void }) {
       <View style={styles.content}>
         {/* Icon Box */}
         <View style={styles.iconBox}>
-          <IconComponent
-            size={80}
+          <IconComponent 
+            size={80} 
             color={T.primary}
             strokeWidth={1.5}
           />
