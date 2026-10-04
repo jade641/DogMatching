@@ -19,7 +19,7 @@ import {
   SendRequest
 } from "../components/Profile";
 import { VerifyChoose, VerifyStatus, VerifyUpload } from "../components/Verify";
-import { VetDashboard, VetProfile, VetRequestDetail, VetRequests } from "../components/Veterinarian";
+import { VetDashboard, VetProfile, VetRequestDetail, VetRequests, VetSettings } from "../components/Veterinarian";
 import { VetExamination, VetRecords } from "../components/VeterinarianExam";
 import { useV3 } from "../contexts/AppContext";
 import { Shell } from "../navigation/Shell";
