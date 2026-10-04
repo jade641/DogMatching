@@ -7,7 +7,8 @@ import {
     Clock,
     FileText,
     MapPin,
-    Stethoscope
+    Stethoscope,
+    User
 } from "lucide-react-native";
 import { useState } from "react";
 import {
@@ -104,7 +105,7 @@ const MOCK_VET_EXAMINATIONS: VeterinaryExamination[] = [
 
 /* ── Veterinarian Dashboard ──────────────────────────────────── */
 export function VetDashboard() {
-  const { navigate, goBack, currentUser, setCurrentUser, setAuthState } = useV3();
+  const { navigate, goBack, currentUser } = useV3();
   const [requests] = useState(MOCK_VET_REQUESTS);
 
   const pendingCount = requests.filter((r) => r.status === "pending").length;
@@ -113,12 +114,6 @@ export function VetDashboard() {
   const todayAppointments = requests.filter(
     (r) => r.preferredDate === new Date().toISOString().split("T")[0]
   ).length;
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setAuthState("landing");
-    navigate("landing");
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -161,17 +156,17 @@ export function VetDashboard() {
             </Text>
           </View>
           <TouchableOpacity
-            onPress={handleLogout}
+            onPress={() => navigate("vet-profile")}
             style={{
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: "#FEE2E2",
+              backgroundColor: T.bg,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <LogOut size={20} color={T.error} />
+            <User size={20} color={T.dark} />
           </TouchableOpacity>
         </View>
       </View>
@@ -992,3 +987,455 @@ export function VetRequestDetail() {
 
 // Export mock data for use in other components
 export { MOCK_VET_EXAMINATIONS, MOCK_VET_REQUESTS };
+
+/* ── Veterinarian Profile ───────────────────────────────────── */
+export function VetProfile() {
+  const { navigate, goBack, setUser, currentUser } = useV3();
+
+  const handleLogout = () => {
+    // Clear user data
+    setUser(null);
+    // Navigate to login screen
+    navigate("login");
+  };
+
+  const vetInfo = {
+    name: currentUser?.name || "Dr. Maria Santos",
+    licenseNumber: "VET-2020-001",
+    specialties: ["Breeding Health", "Vaccinations", "General Practice"],
+    clinic: "Davao Veterinary Clinic",
+    yearsOfExperience: 10,
+    location: "Davao City",
+    memberSince: "January 2020",
+    rating: 4.9,
+    totalExams: 156,
+    completedToday: 3,
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {/* Header */}
+      <View
+        style={{
+          paddingHorizontal: 20,
+          paddingTop: 48,
+          paddingBottom: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          backgroundColor: T.white,
+          borderBottomWidth: 1,
+          borderBottomColor: T.border,
+        }}
+      >
+        <TouchableOpacity onPress={goBack}>
+          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
+        </TouchableOpacity>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            flex: 1,
+          }}
+        >
+          <Stethoscope size={18} color={T.dark} strokeWidth={1.5} />
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "700",
+              color: T.dark,
+              fontFamily: FONT,
+            }}
+          >
+            Veterinarian Profile
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
+      >
+        {/* Profile header */}
+        <View
+          style={{
+            alignItems: "center",
+            paddingTop: 24,
+            paddingBottom: 20,
+            paddingHorizontal: 20,
+            backgroundColor: T.white,
+          }}
+        >
+          <View style={{ position: "relative", marginBottom: 12 }}>
+            <View
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: T.primary,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 24, fontWeight: "700", color: "#fff" }}>
+                {vetInfo.name.split(' ').map(n => n[0]).join('')}
+              </Text>
+            </View>
+            <View style={{ position: "absolute", bottom: -4, right: -4 }}>
+              <CheckCircle
+                size={20}
+                color={T.success}
+                fill={T.white}
+                strokeWidth={2}
+              />
+            </View>
+          </View>
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "700",
+              color: T.dark,
+              fontFamily: FONT,
+            }}
+          >
+            {vetInfo.name}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <MapPin size={12} color={T.medium} strokeWidth={1.5} />
+            <Text style={{ fontSize: 14, color: T.medium }}>{vetInfo.location}</Text>
+            <Text style={{ fontSize: 14, color: T.medium }}> • </Text>
+            <Calendar size={12} color={T.medium} strokeWidth={1.5} />
+            <Text style={{ fontSize: 14, color: T.medium }}>
+              Member since {vetInfo.memberSince}
+            </Text>
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              marginTop: 4,
+            }}
+          >
+            <CheckCircle size={14} color={T.success} strokeWidth={2} />
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: T.success,
+              }}
+            >
+              Verified Veterinarian
+            </Text>
+          </View>
+        </View>
+
+        {/* Professional Info */}
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginTop: 20,
+            marginBottom: 20,
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: T.white,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 2,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <FileText size={18} color={T.dark} strokeWidth={1.5} />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            >
+              Professional Information
+            </Text>
+          </View>
+          <View style={{ gap: 12 }}>
+            <View>
+              <Text style={{ fontSize: 12, color: T.medium }}>License Number</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginTop: 4 }}>
+                {vetInfo.licenseNumber}
+              </Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, color: T.medium }}>Clinic</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginTop: 4 }}>
+                {vetInfo.clinic}
+              </Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, color: T.medium }}>Experience</Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginTop: 4 }}>
+                {vetInfo.yearsOfExperience} years
+              </Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 12, color: T.medium, marginBottom: 8 }}>Specialties</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {vetInfo.specialties.map((specialty) => (
+                  <View
+                    key={specialty}
+                    style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      backgroundColor: T.primaryLight,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, color: T.primary, fontWeight: "600" }}>
+                      {specialty}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Statistics */}
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginBottom: 20,
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: T.white,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 2,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <Activity size={18} color={T.dark} strokeWidth={1.5} />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            >
+              Statistics
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", gap: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 24, fontWeight: "800", color: T.primary }}>
+                {vetInfo.totalExams}
+              </Text>
+              <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
+                Total Examinations
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 24, fontWeight: "800", color: T.primary }}>
+                  {vetInfo.rating}
+                </Text>
+                <CheckCircle size={16} color={T.success} strokeWidth={2} />
+              </View>
+              <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
+                Average Rating
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <FileText size={18} color={T.dark} strokeWidth={1.5} />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "700",
+                color: T.dark,
+                fontFamily: FONT,
+              }}
+            >
+              Quick Actions
+            </Text>
+          </View>
+          <View style={{ gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => navigate("vet-requests")}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 16,
+                borderRadius: 12,
+                backgroundColor: T.white,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.08,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
+              <FileText size={20} color={T.primary} strokeWidth={1.5} />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: T.dark,
+                  fontFamily: FONT,
+                }}
+              >
+                View All Requests
+              </Text>
+              <ChevronRight size={20} color={T.medium} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => navigate("vet-records")}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 16,
+                borderRadius: 12,
+                backgroundColor: T.white,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.08,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
+              <FileText size={20} color={T.accent} strokeWidth={1.5} />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: T.dark,
+                  fontFamily: FONT,
+                }}
+              >
+                Medical Records
+              </Text>
+              <ChevronRight size={20} color={T.medium} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Help Section */}
+        <View
+          style={{
+            marginHorizontal: 20,
+            marginBottom: 20,
+            padding: 16,
+            borderRadius: 16,
+            backgroundColor: T.primaryLight,
+            borderWidth: 1,
+            borderColor: T.primary + "30",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <MessageSquare size={18} color={T.primary} strokeWidth={1.5} />
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "700",
+                color: T.primary,
+                fontFamily: FONT,
+              }}
+            >
+              Need Help?
+            </Text>
+          </View>
+          <Text style={{ fontSize: 12, color: T.primaryDark, marginBottom: 12 }}>
+            Contact PawMatch support for assistance with your veterinary account.
+          </Text>
+          <TouchableOpacity
+            style={{
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+              backgroundColor: T.primary,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#fff" }}>
+              Contact Support
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Logout Button */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+          <TouchableOpacity
+            onPress={handleLogout}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              paddingVertical: 16,
+              borderRadius: 12,
+              backgroundColor: T.white,
+              borderWidth: 1,
+              borderColor: T.error,
+            }}
+          >
+            <User size={20} color={T.error} strokeWidth={1.5} />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: T.error,
+                fontFamily: FONT,
+              }}
+            >
+              Log Out
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
