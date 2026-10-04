@@ -1,25 +1,25 @@
 import { ForgotPassword, ForgotPasswordSent, Login, Onboarding, Register, ResetPassword, Splash } from "../components/Auth";
 import {
-    EmptyMatches,
-    EmptyNotifications,
-    EmptyVerify,
-    EventsScreen,
-    NotificationsScreen,
-    ReputationScreen,
-    SettingsScreen,
+  EmptyMatches,
+  EmptyNotifications,
+  EmptyVerify,
+  EventsScreen,
+  NotificationsScreen,
+  ReputationScreen,
+  SettingsScreen,
 } from "../components/Community";
 import { ConversationScreen } from "../components/Conversation";
 import { FilterScreen, HomeScreen, MatchScreen } from "../components/Home";
 import {
-    AddDog,
-    DogProfile,
-    MatchProfileScreen,
-    OwnerProfile,
-    RequestReceived,
-    SendRequest
+  AddDog,
+  DogProfile,
+  MatchProfileScreen,
+  OwnerProfile,
+  RequestReceived,
+  SendRequest
 } from "../components/Profile";
 import { VerifyChoose, VerifyStatus, VerifyUpload } from "../components/Verify";
-import { VetDashboard, VetRequestDetail, VetRequests } from "../components/Veterinarian";
+import { VetDashboard, VetProfile, VetRequestDetail, VetRequests } from "../components/Veterinarian";
 import { VetExamination, VetRecords } from "../components/VeterinarianExam";
 import { useV3 } from "../contexts/AppContext";
 import { Shell } from "../navigation/Shell";
