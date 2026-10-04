@@ -1,36 +1,24 @@
 import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  Calendar,
-  Check,
-  CheckCircle,
-  ChevronRight,
-  Clock,
-  FileText,
-  Heart,
-  MapPin,
-  PawPrint,
-  Plus,
-  Search,
-  Stethoscope,
-  Syringe,
-  ThermometerSun,
-  User,
-  Weight,
-  X,
+    Activity,
+    ArrowLeft,
+    Calendar,
+    CheckCircle,
+    ChevronRight,
+    Clock,
+    FileText,
+    MapPin,
+    Stethoscope
 } from "lucide-react-native";
 import { useState } from "react";
 import {
-  Image,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Image,
+    ScrollView,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
-import { Btn, Field, FONT, IMGS, MOCK_DOGS, T, useV3 } from "../contexts/AppContext";
-import type { Dog, VeterinaryExamination, VeterinaryRequest } from "../types";
+import { Btn, FONT, MOCK_DOGS, T, useV3 } from "../contexts/AppContext";
+import type { VeterinaryExamination, VeterinaryRequest } from "../types";
 
 // Mock data for veterinary requests
 const MOCK_VET_REQUESTS: VeterinaryRequest[] = [
@@ -116,7 +104,7 @@ const MOCK_VET_EXAMINATIONS: VeterinaryExamination[] = [
 
 /* ── Veterinarian Dashboard ──────────────────────────────────── */
 export function VetDashboard() {
-  const { navigate, goBack, currentUser } = useV3();
+  const { navigate, goBack, currentUser, setCurrentUser, setAuthState } = useV3();
   const [requests] = useState(MOCK_VET_REQUESTS);
 
   const pendingCount = requests.filter((r) => r.status === "pending").length;
@@ -125,6 +113,12 @@ export function VetDashboard() {
   const todayAppointments = requests.filter(
     (r) => r.preferredDate === new Date().toISOString().split("T")[0]
   ).length;
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setAuthState("landing");
+    navigate("landing");
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -167,17 +161,17 @@ export function VetDashboard() {
             </Text>
           </View>
           <TouchableOpacity
-            onPress={() => navigate("settings")}
+            onPress={handleLogout}
             style={{
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: T.bg,
+              backgroundColor: "#FEE2E2",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <User size={20} color={T.dark} />
+            <LogOut size={20} color={T.error} />
           </TouchableOpacity>
         </View>
       </View>
