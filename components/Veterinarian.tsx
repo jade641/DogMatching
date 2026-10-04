@@ -7,6 +7,7 @@ import {
     Clock,
     FileText,
     MapPin,
+    MessageSquare,
     Stethoscope,
     User
 } from "lucide-react-native";
