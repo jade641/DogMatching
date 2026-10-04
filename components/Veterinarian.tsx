@@ -1,13 +1,18 @@
 import {
   Activity,
   ArrowLeft,
+  Bell,
   Calendar,
   CheckCircle,
   ChevronRight,
   Clock,
   FileText,
+  HelpCircle,
+  Lock,
+  LogOut,
   MapPin,
   MessageSquare,
+  Settings,
   Stethoscope,
   User
 } from "lucide-react-native";
