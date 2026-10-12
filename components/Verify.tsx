@@ -1,1063 +1,578 @@
 import {
-    ArrowLeft,
-    Award,
-    Camera,
-    CheckCircle,
-    Clock,
-    Dna,
-    FileCheck,
-    FolderOpen,
-    RotateCcw,
-    Search,
-    Shield,
-    Star,
-    Stethoscope,
-    Syringe,
-    Upload,
-    XCircle,
+  Award,
+  Camera,
+  CheckCircle,
+  Clock,
+  FileCheck,
+  FileText,
+  FolderOpen,
+  History,
+  ImageIcon,
+  PawPrint,
+  RotateCcw,
+  Search,
+  Shield,
+  Star,
+  Upload,
+  X,
+  XCircle,
 } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from "react-native";
-import { FONT, MOCK_VERIFIERS, T, useV3 } from "../contexts/AppContext";
+  docLabel,
+  DOC_TYPES,
+  FONT,
+  FONT_BOLD,
+  FONT_MEDIUM,
+  formatDate,
+  shadow,
+  SUBMISSION_STATUS,
+  T,
+  TIER_DESCRIPTIONS,
+  timeAgo,
+} from "../constants/theme";
+import { useApp, useSession } from "../contexts/AppContext";
+import { useAsync } from "../hooks/useAsync";
+import * as api from "../services/api";
+import { pickDocument, pickImage, type PickedFile, takePhoto } from "../services/media";
+import type { DocType, Submission } from "../types";
+import { MyDogSelector } from "./DogWidgets";
+import { Avatar, Btn, Card, DogImage, EmptyState, ErrorView, Header, Loading, ScoreBar, showMessage, Tag, VeriBadge } from "./ui";
 
-function ProgressBar({ step, total }: { step: number; total: number }) {
+interface StagedDoc {
+  type: DocType;
+  path: string;
+  name: string;
+}
+
+function ProgressBar({ step }: { step: 1 | 2 | 3 }) {
   return (
-    <View
-      style={{
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        backgroundColor: T.white,
-        borderBottomWidth: 1,
-        borderBottomColor: T.border,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          marginBottom: 6,
-        }}
-      >
-        <Text style={{ fontSize: 12, fontWeight: "600", color: T.teal }}>
-          Step {step} of {total}
-        </Text>
+    <View style={{ paddingHorizontal: 20, paddingVertical: 12, backgroundColor: T.white, borderBottomWidth: 1, borderBottomColor: T.border }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD }}>Step {step} of 3</Text>
         <View style={{ flexDirection: "row", gap: 6 }}>
-          {Array.from({ length: total }, (_, i) => (
+          {[1, 2, 3].map((i) => (
             <View
               key={i}
               style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                backgroundColor: i < step ? T.teal : T.bg,
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: i <= step ? T.primary : T.bg,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: i < step ? "#fff" : T.medium,
-                }}
-              >
-                {i + 1}
-              </Text>
+              <Text style={{ fontSize: 12, color: i <= step ? "#fff" : T.medium, fontFamily: FONT_BOLD }}>{i}</Text>
             </View>
           ))}
         </View>
       </View>
-      <View
-        style={{
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: T.bg,
-          overflow: "hidden",
-        }}
-      >
-        <View
-          style={{
-            width: `${(step / total) * 100}%`,
-            height: "100%",
-            backgroundColor: T.teal,
-          }}
-        />
+      <View style={{ height: 6, borderRadius: 3, backgroundColor: T.bg, overflow: "hidden" }}>
+        <View style={{ width: `${(step / 3) * 100}%`, height: "100%", backgroundColor: T.primary }} />
       </View>
     </View>
   );
 }
 
-const DOC_TYPES = [
-  { Icon: Syringe, t: "Vaccination Card", req: true, e: "💉" },
-  { Icon: Stethoscope, t: "Veterinary Health Clearance", req: false, e: "🩺" },
-  { Icon: FileCheck, t: "Pedigree Certificate", req: false, e: "📋" },
-  { Icon: Dna, t: "DNA / Genetic Test Result", req: false, e: "🧬" },
-];
-
-/* ── Screen 9A: Upload ─────────────────────────────────────── */
+/* ── Step 1: upload documents (Figure 16) ───────────────────────── */
 export function VerifyUpload() {
-  const { navigate, goBack } = useV3();
-  const [selected, setSelected] = useState(0);
-  const [uploaded, setUploaded] = useState<boolean[]>([
-    false,
-    false,
-    false,
-    false,
-  ]);
+  const { navigate, goBack, canGoBack, params, myDogs, dogsLoaded, activeDog, setActiveDogId } = useApp();
+  const session = useSession();
+  const dog = myDogs.find((d) => d.id === (params.dogId ?? activeDog?.id)) ?? myDogs[0];
+  const submissions = useAsync(() => (dog ? api.listDogSubmissions(dog.id) : Promise.resolve([])), [dog?.id]);
+  const [selected, setSelected] = useState<DocType>(params.type ?? "vaccination");
+  const [staged, setStaged] = useState<StagedDoc[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-  const doUpload = () =>
-    setUploaded((p) => p.map((v, i) => (i === selected ? true : v)));
+  useEffect(() => setStaged([]), [dog?.id]);
+
+  const statusOf = (type: DocType) => {
+    const list = (submissions.data ?? []).filter((s) => s.submission_type === type);
+    if (list.some((s) => s.status === "vet_verified")) return "vet_verified";
+    return list[0]?.status;
+  };
+
+  // Without an explicit type, start on the first document that still needs submitting.
+  useEffect(() => {
+    if (params.type || !submissions.data) return;
+    const firstOpen = DOC_TYPES.find((d) => {
+      const list = submissions.data!.filter((s) => s.submission_type === d.type);
+      return !list.some((s) => s.status === "vet_verified" || s.status === "owner_submitted");
+    });
+    if (firstOpen) setSelected(firstOpen.type);
+  }, [submissions.data, params.type]);
+
+  if (!dogsLoaded) return <Loading />;
+  if (!dog) {
+    return (
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
+        <Header title="Verify Your Dog" icon={Shield} />
+        <EmptyState icon={PawPrint} title="Add a dog first" message="Verification documents belong to a dog profile." actionLabel="Add Dog Profile" onAction={() => navigate("add-dog")} />
+      </View>
+    );
+  }
+
+  const upload = async (picker: () => Promise<PickedFile | null>) => {
+    const file = await picker();
+    if (!file) return;
+    setUploading(true);
+    try {
+      const path = await api.uploadDocument(session.user.id, selected, file.uri, file.mimeType);
+      setStaged((list) => [...list.filter((d) => d.type !== selected), { type: selected, path, name: file.name }]);
+      const next = DOC_TYPES.find((d) => d.type !== selected && !statusOf(d.type) && !staged.some((s) => s.type === d.type));
+      if (next) setSelected(next.type);
+    } catch (e) {
+      showMessage("Upload failed", api.errorMessage(e));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const verifiedCount = dog.verified_docs.length;
+  const previewScore = Math.min(100, (verifiedCount + staged.length) * 25);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            flex: 1,
-          }}
-        >
-          <Shield size={18} color={T.dark} strokeWidth={1.5} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Verify Your Dog
-          </Text>
-        </View>
-      </View>
-      <ProgressBar step={1} total={3} />
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 20,
-          gap: 20,
-          paddingBottom: 32,
-        }}
-      >
-        <Text style={{ fontSize: 14, color: T.medium }}>
-          Upload documents to earn your verification badge. More documents =
-          higher tier.
+      <Header title="Verify Your Dog" icon={Shield} onBack={canGoBack ? goBack : undefined} />
+      <ProgressBar step={1} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 18, paddingBottom: 40 }}>
+        <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT, lineHeight: 20 }}>
+          Upload documents to earn your verification badge. More documents = higher tier.
         </Text>
 
-        {/* Trust score preview */}
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 16,
-            backgroundColor: T.white,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            elevation: 2,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 8,
-            }}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Award size={16} color={T.dark} strokeWidth={1.5} />
-              <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
-                Trust Score Preview
-              </Text>
-            </View>
-            <View
-              style={{
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 12,
-                backgroundColor:
-                  uploaded.filter(Boolean).length >= 2
-                    ? T.tealLight
-                    : T.amberLight,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color:
-                    uploaded.filter(Boolean).length >= 2 ? T.teal : "#a06000",
-                }}
-              >
-                {uploaded.filter(Boolean).length === 0
-                  ? "No tier yet"
-                  : uploaded.filter(Boolean).length === 1
-                    ? "Tier 1"
-                    : "Tier 2 progress"}
-              </Text>
-            </View>
-          </View>
-          <View
-            style={{
-              height: 12,
-              borderRadius: 6,
-              backgroundColor: T.bg,
-              overflow: "hidden",
-            }}
-          >
-            <View
-              style={{
-                width: `${Math.min(uploaded.filter(Boolean).length * 33, 100)}%`,
-                height: "100%",
-                backgroundColor: T.teal,
-              }}
-            />
-          </View>
-        </View>
+        {myDogs.length > 1 && <MyDogSelector dogs={myDogs} activeId={dog.id} onSelect={setActiveDogId} label="Dog to verify" />}
 
-        {/* Document type selector */}
-        <View>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "700",
-              marginBottom: 12,
-              color: T.dark,
-            }}
-          >
-            Choose Document Type
-          </Text>
-          <View style={{ gap: 8 }}>
-            {DOC_TYPES.map((d, i) => (
+        <Card style={{ gap: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Award size={16} color={T.dark} strokeWidth={1.6} />
+              <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Trust Score Preview</Text>
+            </View>
+            <VeriBadge tier={dog.tier} />
+          </View>
+          <ScoreBar score={previewScore} showLabel />
+          <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{TIER_DESCRIPTIONS[dog.tier]}</Text>
+        </Card>
+
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Choose Document Type</Text>
+          {DOC_TYPES.map((d) => {
+            const status = statusOf(d.type);
+            const isStaged = staged.some((s) => s.type === d.type);
+            const active = selected === d.type;
+            return (
               <TouchableOpacity
-                key={d.t}
-                onPress={() => setSelected(i)}
+                key={d.type}
+                onPress={() => setSelected(d.type)}
+                disabled={status === "vet_verified"}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 12,
-                  padding: 16,
-                  borderRadius: 16,
-                  backgroundColor: selected === i ? T.tealLight : T.white,
+                  padding: 14,
+                  borderRadius: 14,
+                  backgroundColor: active ? T.primaryLight : T.white,
                   borderWidth: 1.5,
-                  borderColor: selected === i ? T.teal : T.border,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.08,
-                  shadowRadius: 8,
-                  elevation: 2,
+                  borderColor: active ? T.primary : T.border,
+                  opacity: status === "vet_verified" ? 0.7 : 1,
                 }}
               >
-                <Text style={{ fontSize: 24 }}>{d.e}</Text>
+                <FileCheck size={22} color={T.primary} strokeWidth={1.5} />
                 <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: T.dark,
-                    }}
-                  >
-                    {d.t}
-                  </Text>
-                  {d.req && (
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: T.coral,
-                      }}
-                    >
-                      Required
-                    </Text>
-                  )}
+                  <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_MEDIUM }}>{d.label}</Text>
+                  {d.required && !status && <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT_BOLD }}>Required for Tier 1</Text>}
+                  {status && <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{SUBMISSION_STATUS[status].label}</Text>}
                 </View>
-                {uploaded[i] ? (
-                  <CheckCircle
-                    size={20}
-                    color={T.teal}
-                    fill={T.tealLight}
-                    strokeWidth={2}
-                  />
-                ) : selected === i ? (
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      borderWidth: 2,
-                      borderColor: T.teal,
-                      backgroundColor: T.teal,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: "#fff",
-                      }}
-                    />
-                  </View>
+                {status === "vet_verified" || isStaged ? (
+                  <CheckCircle size={20} color={status === "vet_verified" ? T.success : T.primary} />
                 ) : (
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      borderWidth: 2,
-                      borderColor: T.border,
-                    }}
-                  />
+                  <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: active ? T.primary : T.border, alignItems: "center", justifyContent: "center" }}>
+                    {active && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: T.primary }} />}
+                  </View>
                 )}
               </TouchableOpacity>
-            ))}
-          </View>
+            );
+          })}
         </View>
 
-        {/* Upload area */}
         <View
           style={{
             borderRadius: 16,
-            padding: 24,
+            padding: 22,
             alignItems: "center",
-            gap: 12,
+            gap: 10,
             borderWidth: 2,
-            borderColor: T.teal + "50",
+            borderColor: T.primary + "60",
             borderStyle: "dashed",
-            backgroundColor: T.tealLight,
+            backgroundColor: T.primaryLight,
           }}
         >
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: T.white,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Upload size={28} color={T.teal} strokeWidth={1.5} />
-          </View>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: T.teal,
-              textAlign: "center",
-            }}
-          >
-            Tap to upload or take a photo
-          </Text>
-          <Text style={{ fontSize: 12, color: T.medium, textAlign: "center" }}>
-            JPG, PNG, PDF — Max 10MB
-          </Text>
-          <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
-            <TouchableOpacity
-              onPress={doUpload}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 12,
-                backgroundColor: T.teal,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Camera size={14} color="#fff" strokeWidth={2} />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: "#fff",
-                }}
-              >
-                Take Photo
+          {uploading ? (
+            <>
+              <ActivityIndicator color={T.primary} size="large" />
+              <Text style={{ color: T.primaryDark, fontFamily: FONT_BOLD }}>Uploading {docLabel(selected)}…</Text>
+            </>
+          ) : (
+            <>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: T.white, alignItems: "center", justifyContent: "center" }}>
+                <Upload size={26} color={T.primary} strokeWidth={1.5} />
+              </View>
+              <Text style={{ fontSize: 14, color: T.primaryDark, fontFamily: FONT_BOLD, textAlign: "center" }}>
+                Upload your {docLabel(selected)}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={doUpload}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 12,
-                backgroundColor: T.white,
-                borderWidth: 1,
-                borderColor: T.teal,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <FolderOpen size={14} color={T.teal} strokeWidth={2} />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: T.teal,
-                }}
-              >
-                Choose File
-              </Text>
-            </TouchableOpacity>
-          </View>
+              <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>JPG, PNG, PDF — Max 10MB</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 4 }}>
+                <Btn title="Take Photo" icon={Camera} size="small" onPress={() => upload(takePhoto)} />
+                <Btn title="Gallery" icon={ImageIcon} size="small" variant="outline" onPress={() => upload(() => pickImage(false))} />
+                <Btn title="File / PDF" icon={FolderOpen} size="small" variant="outline" onPress={() => upload(pickDocument)} />
+              </View>
+            </>
+          )}
         </View>
 
-        <TouchableOpacity
-          onPress={() => navigate("verify-choose")}
-          style={{
-            width: "100%",
-            paddingVertical: 14,
-            borderRadius: 12,
-            backgroundColor: T.teal,
-            alignItems: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#fff",
-              fontFamily: FONT,
-            }}
-          >
-            Next →
-          </Text>
+        {staged.length > 0 && (
+          <Card style={{ gap: 8 }}>
+            <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Ready to send ({staged.length})</Text>
+            {staged.map((s) => (
+              <View key={s.type} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <FileText size={16} color={T.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT_MEDIUM }}>{docLabel(s.type)}</Text>
+                  <Text style={{ fontSize: 11, color: T.medium, fontFamily: FONT }} numberOfLines={1}>{s.name}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setStaged((list) => list.filter((x) => x.type !== s.type))} accessibilityRole="button" accessibilityLabel="Remove document" hitSlop={8}>
+                  <X size={16} color={T.medium} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </Card>
+        )}
+
+        <Btn
+          title="Next → Choose Verifier"
+          size="large"
+          disabled={staged.length === 0 || uploading}
+          onPress={() => navigate("verify-choose", { dogId: dog.id, docs: staged })}
+        />
+        <TouchableOpacity onPress={() => navigate("verify-status", { dogId: dog.id })} style={{ alignItems: "center" }}>
+          <Text style={{ color: T.primary, fontFamily: FONT_BOLD }}>View submitted documents →</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-/* ── Screen 9B: Choose Verifier ─────────────────────────────── */
+/* ── Step 2: choose verifier (Figure 17) ────────────────────────── */
 export function VerifyChoose() {
-  const { navigate, goBack } = useV3();
+  const { goBack, replace, params, showToast } = useApp();
+  const docs: StagedDoc[] = params.docs ?? [];
+  const verifiers = useAsync(() => api.listVerifiers(), []);
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const filtered = MOCK_VERIFIERS.filter((v) =>
-    v.name.toLowerCase().includes(search.toLowerCase()),
+  const filtered = (verifiers.data ?? []).filter((v) =>
+    `${v.name} ${v.clinic} ${v.role}`.toLowerCase().includes(search.trim().toLowerCase()),
   );
+
+  const send = async () => {
+    if (!selected || docs.length === 0) return;
+    setSending(true);
+    try {
+      const created = await api.submitDocuments(params.dogId, selected, docs.map((d) => ({ type: d.type, path: d.path })));
+      showToast("Sent for review", "The verifier has been notified.", "success");
+      replace("verify-status", { dogId: params.dogId, submissionIds: created.map((s) => s.id) });
+    } catch (e) {
+      showMessage("Couldn't submit", api.errorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            flex: 1,
-          }}
-        >
-          <Shield size={18} color={T.dark} strokeWidth={1.5} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Choose Your Verifier
-          </Text>
-        </View>
-        <TouchableOpacity>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <RotateCcw size={14} color={T.coral} strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: T.coral,
-                fontFamily: FONT,
-              }}
-            >
-              Reset
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-      <ProgressBar step={2} total={3} />
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 20,
-          gap: 16,
-          paddingBottom: 32,
-        }}
-      >
-        <Text style={{ fontSize: 14, color: T.medium }}>
-          Select a licensed veterinarian to review your documents.
+      <Header
+        title="Choose Your Verifier"
+        icon={Shield}
+        onBack={goBack}
+        right={
+          <TouchableOpacity onPress={() => { setSelected(null); setSearch(""); }} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <RotateCcw size={14} color={T.primary} />
+            <Text style={{ fontSize: 13, color: T.primary, fontFamily: FONT_BOLD }}>Reset</Text>
+          </TouchableOpacity>
+        }
+      />
+      <ProgressBar step={2} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT }}>
+          Select a licensed veterinarian or certified breeder to review your {docs.length} document{docs.length === 1 ? "" : "s"}.
         </Text>
-
-        {/* Search */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingHorizontal: 16,
-            height: 48,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: T.border,
-            backgroundColor: T.white,
-          }}
-        >
-          <Search size={18} color={T.medium} strokeWidth={1.5} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, height: 46, borderRadius: 12, borderWidth: 1, borderColor: T.border, backgroundColor: T.white }}>
+          <Search size={18} color={T.medium} />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search for a veterinarian"
-            placeholderTextColor={T.medium}
-            style={{
-              flex: 1,
-              fontSize: 14,
-              color: T.dark,
-              fontFamily: FONT,
-            }}
+            placeholder="Search for a veterinarian or clinic"
+            placeholderTextColor={T.light}
+            style={{ flex: 1, fontSize: 14, color: T.dark, fontFamily: FONT }}
           />
         </View>
 
-        {/* Verifier cards */}
-        {filtered.map((v) => (
-          <TouchableOpacity
-            key={v.id}
-            onPress={() => setSelected(v.id)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 16,
-              padding: 16,
-              borderRadius: 16,
-              backgroundColor: T.white,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              elevation: 2,
-              borderWidth: 2,
-              borderColor: selected === v.id ? T.teal : T.border,
-            }}
-          >
-            <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: T.teal,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#fff" }}>
-                {v.avatar}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
-                {v.name}
-              </Text>
-              <Text style={{ fontSize: 12, color: T.medium }}>{v.role}</Text>
-              <Text style={{ fontSize: 12, color: T.medium }}>{v.clinic}</Text>
-              <View
+        {verifiers.loading ? (
+          <Loading />
+        ) : verifiers.error ? (
+          <ErrorView message={verifiers.error} onRetry={() => verifiers.reload()} />
+        ) : filtered.length === 0 ? (
+          <EmptyState icon={Search} title="No verifiers found" message="No approved verifiers match your search yet." />
+        ) : (
+          filtered.map((v) => {
+            const isSelected = selected === v.user_id;
+            return (
+              <TouchableOpacity
+                key={v.id}
+                onPress={() => setSelected(v.user_id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 8,
-                  marginTop: 4,
+                  gap: 14,
+                  padding: 14,
+                  borderRadius: 16,
+                  backgroundColor: T.white,
+                  borderWidth: 2,
+                  borderColor: isSelected ? T.primary : T.border,
+                  ...shadow,
                 }}
               >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-                >
-                  <Star
-                    size={12}
-                    color="#f59e0b"
-                    fill="#f59e0b"
-                    strokeWidth={1.5}
-                  />
-                  <Text style={{ fontSize: 12 }}>{v.rating}</Text>
+                <Avatar name={v.name} size={52} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>{v.name}</Text>
+                  <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{v.role}</Text>
+                  {v.clinic ? <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{v.clinic}</Text> : null}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 }}>
+                    {v.rating > 0 && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                        <Star size={12} color={T.star} fill={T.star} />
+                        <Text style={{ fontSize: 12, fontFamily: FONT }}>{v.rating.toFixed(1)}</Text>
+                      </View>
+                    )}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: v.available ? T.success : T.secondaryDark }} />
+                      <Text style={{ fontSize: 12, fontFamily: FONT }}>{v.available ? "Available" : "Busy"}</Text>
+                    </View>
+                  </View>
                 </View>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-                >
-                  <View
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: v.available ? "#22c55e" : T.coral,
-                    }}
-                  />
-                  <Text style={{ fontSize: 12 }}>
-                    {v.available ? "Available" : "Busy"}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 12,
-                backgroundColor: selected === v.id ? T.teal : T.white,
-                borderWidth: 1.5,
-                borderColor: T.teal,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              {selected === v.id ? (
-                <>
-                  <CheckCircle size={14} color="#fff" strokeWidth={2} />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: "#fff",
-                    }}
-                  >
-                    Selected
-                  </Text>
-                </>
-              ) : (
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: T.teal,
-                  }}
-                >
-                  Select
-                </Text>
-              )}
-            </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
+                {isSelected ? <Tag label="Selected" tone="brand" /> : <Tag label="Select" />}
+              </TouchableOpacity>
+            );
+          })
+        )}
 
-        <TouchableOpacity
-          onPress={() => navigate("verify-status")}
-          disabled={!selected}
-          style={{
-            width: "100%",
-            paddingVertical: 14,
-            borderRadius: 12,
-            backgroundColor: selected ? T.teal : T.light,
-            alignItems: "center",
-            marginTop: 8,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: selected ? "#fff" : T.medium,
-              fontFamily: FONT,
-            }}
-          >
-            Send for Review →
-          </Text>
-        </TouchableOpacity>
+        <Btn title="Send for Review →" size="large" disabled={!selected || docs.length === 0} loading={sending} onPress={send} />
       </ScrollView>
     </View>
   );
 }
 
-/* ── Screen 9C: Verification Status ─────────────────────────── */
-export function VerifyStatus() {
-  const { navigate, goBack } = useV3();
-  const [docStatus] = useState<"pending" | "verified" | "rejected">("verified");
+/* ── Step 3: verification status (Figure 18) ────────────────────── */
+function SubmissionRow({ s }: { s: Submission }) {
+  const status = SUBMISSION_STATUS[s.status];
+  return (
+    <Card style={{ gap: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD, flexShrink: 1 }}>{docLabel(s.submission_type)}</Text>
+        <Tag label={status.label} tone={status.tone} />
+      </View>
+      <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT }}>Submitted {formatDate(s.created_at)}</Text>
+      <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT }}>Reviewer: {s.verifier_name}</Text>
+      {s.reviewed_at && <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT }}>Reviewed {formatDate(s.reviewed_at)}</Text>}
+      {s.notes ? (
+        <View style={{ backgroundColor: s.status === "verification_failed" ? T.errorLight : T.bg, borderRadius: 10, padding: 10 }}>
+          <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT }}>Remarks: {s.notes}</Text>
+        </View>
+      ) : null}
+    </Card>
+  );
+}
 
-  const statusMap = {
-    pending: {
-      Icon: Clock,
-      label: "Under Review",
-      color: T.amber,
-      bg: T.amberLight,
-      e: "⏳",
-    },
-    verified: {
-      Icon: CheckCircle,
-      label: "Verified!",
-      color: T.teal,
-      bg: T.tealLight,
-      e: "✅",
-    },
-    rejected: {
-      Icon: XCircle,
-      label: "Rejected",
-      color: T.coral,
-      bg: T.coralLight,
-      e: "❌",
-    },
-  };
-  const s = statusMap[docStatus];
+export function VerifyStatus() {
+  const { navigate, replace, goBack, canGoBack, params, myDogs, activeDog, setActiveDogId, lastNotification, reloadDogs } = useApp();
+  const dog = myDogs.find((d) => d.id === (params.dogId ?? activeDog?.id)) ?? myDogs[0];
+  const focusIds: string[] = useMemo(() => params.submissionIds ?? [], [params.submissionIds]);
+  const submissions = useAsync(
+    () => (dog ? api.listDogSubmissions(dog.id) : Promise.resolve([])),
+    [dog?.id, lastNotification?.id],
+  );
+
+  useEffect(() => {
+    if (!dog) return;
+    return api.subscribeToSubmissions(`dog_id=eq.${dog.id}`, () => {
+      submissions.reload(true);
+      reloadDogs().catch(() => undefined);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dog?.id]);
+
+  const focus = useMemo(() => {
+    const all = submissions.data ?? [];
+    const batch = focusIds.length ? all.filter((s) => focusIds.includes(s.id)) : all.slice(0, 1);
+    return batch;
+  }, [submissions.data, focusIds]);
+
+  if (!dog) {
+    return (
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
+        <Header title="Verification Status" icon={Shield} onBack={canGoBack ? goBack : undefined} />
+        <EmptyState icon={PawPrint} title="No dogs yet" message="Add a dog and upload documents to get verified." actionLabel="Add Dog Profile" onAction={() => navigate("add-dog")} />
+      </View>
+    );
+  }
+
+  const anyFailed = focus.some((s) => s.status === "verification_failed");
+  const allVerified = focus.length > 0 && focus.every((s) => s.status === "vet_verified");
+  const pending = focus.filter((s) => s.status === "owner_submitted");
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            flex: 1,
-          }}
-        >
-          <Shield size={18} color={T.dark} strokeWidth={1.5} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Verification Status
-          </Text>
-        </View>
-      </View>
-      <ProgressBar step={3} total={3} />
+      <Header title="Verification Status" icon={Shield} onBack={canGoBack ? goBack : undefined} />
+      <ProgressBar step={3} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }}>
+        {myDogs.length > 1 && <MyDogSelector dogs={myDogs} activeId={dog.id} onSelect={(id) => { setActiveDogId(id); replace("verify-status", { dogId: id }); }} label="Dog" />}
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 24,
-          gap: 20,
-          paddingBottom: 32,
-        }}
-      >
-        {/* Status card */}
-        <View
-          style={{
-            padding: 20,
-            borderRadius: 16,
-            backgroundColor: T.white,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
-            elevation: 4,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              marginBottom: 16,
-            }}
-          >
-            <View>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-              >
-                <Syringe size={16} color={T.dark} strokeWidth={1.5} />
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "700",
-                    marginTop: 2,
-                    color: T.dark,
-                  }}
-                >
-                  Vaccination Card
-                </Text>
+        {submissions.loading ? (
+          <Loading />
+        ) : submissions.error ? (
+          <ErrorView message={submissions.error} onRetry={() => submissions.reload()} />
+        ) : (submissions.data ?? []).length === 0 ? (
+          <EmptyState
+            icon={Shield}
+            title="Get Verified"
+            message={`Upload ${dog.name}'s documents to unlock verified matches.`}
+            actionLabel="Start Verification"
+            onAction={() => navigate("verify-upload", { dogId: dog.id })}
+          />
+        ) : (
+          <>
+            <View style={{ alignItems: "center", gap: 12, paddingVertical: 12 }}>
+              {allVerified ? (
+                <>
+                  <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: T.successLight, alignItems: "center", justifyContent: "center" }}>
+                    <CheckCircle size={48} color={T.success} strokeWidth={1.5} />
+                  </View>
+                  <Text style={{ fontSize: 20, color: T.dark, fontFamily: FONT_BOLD, textAlign: "center" }}>
+                    {focus.length > 1 ? "Your documents have been verified!" : "Your document has been verified!"}
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: T.secondaryLight }}>
+                    <Award size={16} color={T.warning} />
+                    <Text style={{ fontSize: 14, color: T.warning, fontFamily: FONT_BOLD }}>
+                      {dog.tier > 0 ? `Badge awarded: Tier ${dog.tier} Verified` : "Add a vaccination card to earn Tier 1"}
+                    </Text>
+                  </View>
+                </>
+              ) : anyFailed ? (
+                <>
+                  <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: T.errorLight, alignItems: "center", justifyContent: "center" }}>
+                    <XCircle size={48} color={T.error} strokeWidth={1.5} />
+                  </View>
+                  <Text style={{ fontSize: 20, color: T.dark, fontFamily: FONT_BOLD, textAlign: "center" }}>Verification Failed</Text>
+                  <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT, textAlign: "center" }}>
+                    See the reviewer&apos;s remarks below, then upload a clearer or complete document.
+                  </Text>
+                  <Btn title="Re-upload Document" icon={RotateCcw} onPress={() => navigate("verify-upload", { dogId: dog.id, type: focus.find((s) => s.status === "verification_failed")?.submission_type })} />
+                </>
+              ) : (
+                <>
+                  <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: T.secondaryLight, alignItems: "center", justifyContent: "center" }}>
+                    <Clock size={48} color={T.warning} strokeWidth={1.5} />
+                  </View>
+                  <Text style={{ fontSize: 20, color: T.dark, fontFamily: FONT_BOLD }}>Under Review</Text>
+                  <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT, textAlign: "center", lineHeight: 20 }}>
+                    {pending[0]?.verifier_name ?? "Your verifier"} will review your document{pending.length > 1 ? "s" : ""}. You&apos;ll get a notification as soon as it&apos;s done.
+                  </Text>
+                </>
+              )}
+              <TouchableOpacity onPress={() => navigate("audit-trail", { dogId: dog.id })}>
+                <Text style={{ fontSize: 14, color: T.primary, fontFamily: FONT_BOLD, textDecorationLine: "underline" }}>View Audit Trail</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>All submissions for {dog.name}</Text>
+            {(submissions.data ?? []).map((s) => (
+              <SubmissionRow key={s.id} s={s} />
+            ))}
+          </>
+        )}
+
+        <Btn title="Upload more documents" icon={Upload} variant="outline" onPress={() => navigate("verify-upload", { dogId: dog.id })} />
+        <Btn title="Back to Profile" onPress={() => navigate("dog-profile", { dogId: dog.id, tab: "health" })} />
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ── Audit trail ────────────────────────────────────────────────── */
+const AUDIT_STYLE = {
+  submitted: { Icon: Upload, color: T.accent, label: "Submitted" },
+  approved: { Icon: CheckCircle, color: T.success, label: "Approved" },
+  rejected: { Icon: XCircle, color: T.error, label: "Rejected" },
+  tier_changed: { Icon: Award, color: T.secondaryDark, label: "Badge updated" },
+} as const;
+
+export function AuditTrailScreen() {
+  const { goBack, params } = useApp();
+  const dogId: string = params.dogId;
+  const dog = useAsync(() => api.getDog(dogId), [dogId]);
+  const entries = useAsync(() => api.getAuditTrail(dogId), [dogId]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <Header title="Audit Trail" icon={History} subtitle={dog.data ? `${dog.data.name} • ${dog.data.breed}` : undefined} onBack={goBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 12, paddingBottom: 40 }}>
+        {dog.data && (
+          <Card style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <DogImage uri={dog.data.img} width={48} height={48} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD }}>{dog.data.name}</Text>
+              <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{TIER_DESCRIPTIONS[dog.data.tier]}</Text>
+            </View>
+            <VeriBadge tier={dog.data.tier} />
+          </Card>
+        )}
+        <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, lineHeight: 18 }}>
+          Every submission and verification decision is recorded here and cannot be edited.
+        </Text>
+        {entries.loading ? (
+          <Loading />
+        ) : entries.error ? (
+          <ErrorView message={entries.error} onRetry={() => entries.reload()} />
+        ) : (entries.data ?? []).length === 0 ? (
+          <EmptyState icon={History} title="No activity yet" message="No documents have been submitted for this dog." />
+        ) : (
+          (entries.data ?? []).map((e) => {
+            const style = AUDIT_STYLE[e.action];
+            return (
+              <View key={e.id} style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: T.white, alignItems: "center", justifyContent: "center", ...shadow }}>
+                  <style.Icon size={17} color={style.color} />
+                </View>
+                <View style={{ flex: 1, paddingBottom: 6 }}>
+                  <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>
+                    {style.label}: {e.details}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>
+                    {e.actor_name ? `${e.actor_name} • ` : ""}
+                    {formatDate(e.created_at)} ({timeAgo(e.created_at)})
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 12,
-                backgroundColor: s.bg,
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: s.color }}>
-                {s.e} {s.label}
-              </Text>
-            </View>
-          </View>
-          {[
-            ["Submitted", "June 24, 2026"],
-            ["Reviewer", "Dr. Patricia Reyes, DVM"],
-          ].map(([k, v], i) => (
-            <View
-              key={k}
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                paddingVertical: 8,
-                borderTopWidth: 1,
-                borderTopColor: T.bg,
-              }}
-            >
-              <Text style={{ fontSize: 14, color: T.medium }}>{k}</Text>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark }}>
-                {v}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Verified result */}
-        {docStatus === "verified" && (
-          <View style={{ alignItems: "center", gap: 16, paddingVertical: 16 }}>
-            <View
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: T.tealLight,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <CheckCircle size={48} color={T.teal} strokeWidth={1.5} />
-            </View>
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "700",
-                textAlign: "center",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Your document has been verified!
-            </Text>
-            <View
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 12,
-                backgroundColor: T.amberLight,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Award size={16} color="#8a5a00" strokeWidth={1.5} />
-              <Text
-                style={{ fontSize: 14, fontWeight: "700", color: "#8a5a00" }}
-              >
-                Badge awarded: Tier 2 Verified
-              </Text>
-            </View>
-            <TouchableOpacity>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  textDecorationLine: "underline",
-                  color: T.teal,
-                }}
-              >
-                View Audit Trail
-              </Text>
-            </TouchableOpacity>
-          </View>
+            );
+          })
         )}
-
-        {/* Rejected result */}
-        {docStatus === "rejected" && (
-          <View style={{ alignItems: "center", gap: 16, paddingVertical: 16 }}>
-            <View
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: T.coralLight,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <XCircle size={48} color={T.coral} strokeWidth={1.5} />
-            </View>
-            <View
-              style={{
-                padding: 16,
-                borderRadius: 16,
-                width: "100%",
-                backgroundColor: T.coralLight,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "700",
-                  color: T.coral,
-                  textAlign: "center",
-                }}
-              >
-                Reason for rejection:
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  marginTop: 4,
-                  color: T.dark,
-                  textAlign: "center",
-                }}
-              >
-                Document appears blurry and unreadable. Please re-upload a
-                clearer photo.
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => navigate("verify-upload")}
-              style={{
-                width: "100%",
-                paddingVertical: 14,
-                borderRadius: 12,
-                backgroundColor: T.teal,
-                alignItems: "center",
-                flexDirection: "row",
-                justifyContent: "center",
-                gap: 6,
-              }}
-            >
-              <RotateCcw size={16} color="#fff" strokeWidth={2} />
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#fff",
-                  fontFamily: FONT,
-                }}
-              >
-                Re-upload Document
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Pending */}
-        {docStatus === "pending" && (
-          <View style={{ alignItems: "center", gap: 16, paddingVertical: 32 }}>
-            <View
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: T.amberLight,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Clock size={48} color="#a06000" strokeWidth={1.5} />
-            </View>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: T.dark }}>
-              Under Review
-            </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                textAlign: "center",
-                color: T.medium,
-              }}
-            >
-              Dr. Reyes will review your document within 24–48 hours. You'll get
-              a notification when it's done.
-            </Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          onPress={() => navigate("dog-profile")}
-          style={{
-            width: "100%",
-            paddingVertical: 14,
-            borderRadius: 12,
-            backgroundColor: T.teal,
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          <ArrowLeft size={16} color="#fff" strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#fff",
-              fontFamily: FONT,
-            }}
-          >
-            Back to Profile
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );

@@ -1,610 +1,80 @@
 import {
-    ArrowLeft,
-    Award,
-    Bell,
-    Calendar,
-    Check,
-    ChevronDown,
-    ChevronRight,
-    Eye,
-    FileText,
-    Heart,
-    MapPin,
-    Palette,
-    PawPrint,
-    RefreshCw,
-    Ruler,
-    Search,
-    Send,
-    Settings,
-    Sparkles,
-    Star,
-    Stethoscope,
-    Syringe,
-    TrendingUp,
-    X,
+  Bell,
+  CheckCircle,
+  ChevronRight,
+  Heart,
+  MapPin,
+  MessageCircle,
+  Palette,
+  PawPrint,
+  Plus,
+  RefreshCw,
+  Ruler,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
 } from "lucide-react-native";
-import { ComponentType, useRef, useState } from "react";
-import {
-    Image,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
-} from "react-native";
-import {
-    Btn,
-    Chip,
-    FONT,
-    MOCK_DOGS,
-    ScoreBar,
-    T,
-    useV3,
-    VeriBadge,
-} from "../contexts/AppContext";
-import { FloatingMatchResults, RankedDog } from "./FloatingMatchResults";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { districtOf, FONT, FONT_BOLD, shadow, T, timeAgo } from "../constants/theme";
+import { useApp, useSession } from "../contexts/AppContext";
+import { useAsync } from "../hooks/useAsync";
+import * as api from "../services/api";
+import type { MatchPreferences } from "../services/compatibility";
+import { TEMPERAMENT_OPTIONS } from "../services/compatibility";
+import type { RankedMatch, Size } from "../types";
+import { BreedInput, ColorCombobox, MatchCard, MyDogSelector } from "./DogWidgets";
+import { FloatingMatchResults } from "./FloatingMatchResults";
+import { Avatar, Btn, Card, Chip, EmptyState, ErrorView, Header, Loading, SectionTitle } from "./ui";
 
-type FilterChipConfig = {
-  label: string;
-  active: boolean;
-  Icon: ComponentType<any>;
-};
-
-/* ── Color Options ────────────────────────────────────────────── */
-type ColorOption = {
-  name: string;
-  hex: string;
-  searchTerms: string[];
-};
-
-const COLOR_OPTIONS: ColorOption[] = [
-  { name: "Black", hex: "#1A1A1A", searchTerms: ["black"] },
-  { name: "White", hex: "#FFFFFF", searchTerms: ["white"] },
-  { name: "Brown / Chocolate", hex: "#5C3A21", searchTerms: ["brown", "chocolate"] },
-  { name: "Liver", hex: "#4A2C2A", searchTerms: ["liver"] },
-  { name: "Red", hex: "#A0442A", searchTerms: ["red"] },
-  { name: "Mahogany / Rust", hex: "#8B3A1E", searchTerms: ["mahogany", "rust"] },
-  { name: "Fawn", hex: "#D9B382", searchTerms: ["fawn"] },
-  { name: "Cream", hex: "#F3E5C0", searchTerms: ["cream"] },
-  { name: "Buff", hex: "#E0C08A", searchTerms: ["buff"] },
-  { name: "Yellow", hex: "#E6C35C", searchTerms: ["yellow"] },
-  { name: "Golden", hex: "#D99A2B", searchTerms: ["golden"] },
-  { name: "Apricot", hex: "#F0B27A", searchTerms: ["apricot"] },
-  { name: "Tan", hex: "#C9A27A", searchTerms: ["tan"] },
-  { name: "Wheaten", hex: "#E8D3A2", searchTerms: ["wheaten"] },
-  { name: "Orange", hex: "#E9822B", searchTerms: ["orange"] },
-  { name: "Gray", hex: "#8A8D91", searchTerms: ["gray"] },
-  { name: "Silver", hex: "#C0C4C8", searchTerms: ["silver"] },
-  { name: "Charcoal", hex: "#36393D", searchTerms: ["charcoal"] },
-  { name: "Blue", hex: "#5B6F86", searchTerms: ["blue"] },
-  { name: "Lilac / Isabella", hex: "#A99A9F", searchTerms: ["lilac", "isabella"] },
-  { name: "Champagne", hex: "#EBD9B4", searchTerms: ["champagne"] },
-  { name: "Mixed / Multiple colors", hex: "gradient", searchTerms: ["mixed", "multiple", "colors"] },
-  { name: "Other", hex: "other", searchTerms: ["other"] },
-];
-
-/* ── Color Swatch Component ──────────────────────────────────── */
-function ColorSwatch({ hex, size = 16 }: { hex: string; size?: number }) {
-  if (hex === "gradient") {
-    return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          overflow: "hidden",
-        }}
-      >
-        <View style={{ flex: 1, flexDirection: "row" }}>
-          <View style={{ flex: 1, backgroundColor: "#8B4513" }} />
-          <View style={{ flex: 1, backgroundColor: "#FFFFFF" }} />
-        </View>
-      </View>
-    );
-  }
-
-  if (hex === "other") {
-    return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: 1.5,
-          borderColor: T.medium,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ fontSize: size * 0.6, color: T.medium, fontWeight: "600" }}>?</Text>
-      </View>
-    );
-  }
-
+function NoDogPrompt() {
+  const { navigate } = useApp();
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: hex,
-        borderWidth: hex === "#FFFFFF" ? 1 : 0,
-        borderColor: T.border,
-      }}
-    />
+    <Card style={{ marginHorizontal: 20, marginBottom: 20 }}>
+      <EmptyState
+        icon={PawPrint}
+        title="Add your first dog"
+        message="Create your dog's profile so PawMatch can score compatible breeding partners for you."
+        actionLabel="Add Dog Profile"
+        onAction={() => navigate("add-dog")}
+      />
+    </Card>
   );
 }
 
-/* ── Color Combobox Component ────────────────────────────────── */
-function ColorCombobox({
-  value,
-  onChange,
-  onOtherTextChange,
-  otherText,
-  hasError,
-}: {
-  value: string;
-  onChange: (value: string, otherText?: string) => void;
-  onOtherTextChange: (text: string) => void;
-  otherText: string;
-  hasError?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchText, setSearchText] = useState("");
-  const inputRef = useRef<TextInput>(null);
-
-  const selectedOption = COLOR_OPTIONS.find(opt => opt.name === value);
-
-  const filteredOptions = COLOR_OPTIONS.filter((option) => {
-    if (!searchText.trim()) return true;
-    const query = searchText.toLowerCase();
-    return option.searchTerms.some(term => term.includes(query)) ||
-           option.name.toLowerCase().includes(query);
-  });
-
-  const handleSelect = (option: ColorOption) => {
-    onChange(option.name, "");
-    setSearchText("");
-    setIsOpen(false);
-  };
-
-  const handleClear = () => {
-    onChange("", "");
-    setSearchText("");
-    onOtherTextChange("");
-    setIsOpen(false);
-  };
-
-  const displayText = value || searchText || "";
-  const placeholder = "Select or search color";
-
-  return (
-    <View style={{ gap: 8, position: "relative", zIndex: isOpen ? 1000 : 1, marginBottom: isOpen ? 290 : 0 }}>
-      {isOpen && (
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setIsOpen(false)}
-          style={{
-            position: "absolute",
-            top: -1000,
-            left: -1000,
-            right: -1000,
-            bottom: -1000,
-            zIndex: 999,
-          }}
-        />
-      )}
-      
-      <View
-        style={{
-          borderRadius: 16,
-          paddingHorizontal: 14,
-          height: 52,
-          backgroundColor: T.bg,
-          borderWidth: 1,
-          borderColor: hasError ? T.coral : isOpen ? T.teal : T.border,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-        }}
-        role="combobox"
-        aria-expanded={isOpen}
-        aria-controls="color-listbox"
-      >
-        {selectedOption && !isOpen && (
-          <ColorSwatch hex={selectedOption.hex} size={20} />
-        )}
-        <TextInput
-          ref={inputRef}
-          value={isOpen ? searchText : displayText}
-          onChangeText={(text) => {
-            setSearchText(text);
-            if (!isOpen) setIsOpen(true);
-          }}
-          onFocus={() => setIsOpen(true)}
-          placeholder={placeholder}
-          placeholderTextColor={T.medium}
-          style={{
-            flex: 1,
-            fontSize: 14,
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        />
-        {value ? (
-          <TouchableOpacity
-            onPress={handleClear}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 10,
-              backgroundColor: T.medium,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <X size={12} color="#fff" strokeWidth={2.5} />
-          </TouchableOpacity>
-        ) : (
-          <ChevronDown size={18} color={T.medium} strokeWidth={1.5} />
-        )}
-      </View>
-
-      {isOpen && (
-        <View
-          style={{
-            position: "absolute",
-            top: 60,
-            left: 0,
-            right: 0,
-            backgroundColor: T.white,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: T.border,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            elevation: 8,
-            maxHeight: 280,
-            overflow: "hidden",
-            zIndex: 1001,
-          }}
-          id="color-listbox"
-        >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ padding: 4 }}
-            nestedScrollEnabled
-          >
-            {filteredOptions.length === 0 ? (
-              <View
-                style={{
-                  paddingVertical: 20,
-                  paddingHorizontal: 16,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ fontSize: 14, color: T.medium, textAlign: "center" }}>
-                  No matching color found
-                </Text>
-              </View>
-            ) : (
-              filteredOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.name}
-                  onPress={() => handleSelect(option)}
-                  role="option"
-                  aria-selected={value === option.name}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12,
-                    paddingHorizontal: 16,
-                    paddingVertical: 14,
-                    minHeight: 44,
-                    borderRadius: 12,
-                    backgroundColor: value === option.name ? T.tealLight : "transparent",
-                  }}
-                >
-                  <ColorSwatch hex={option.hex} size={20} />
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontSize: 14,
-                      color: T.dark,
-                      fontWeight: value === option.name ? "600" : "400",
-                      fontFamily: FONT,
-                    }}
-                  >
-                    {option.name}
-                  </Text>
-                  {value === option.name && (
-                    <Check size={16} color={T.teal} strokeWidth={2.5} />
-                  )}
-                </TouchableOpacity>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      )}
-
-      {value === "Other" && (
-        <View
-          style={{
-            borderRadius: 16,
-            paddingHorizontal: 14,
-            height: 52,
-            backgroundColor: T.bg,
-            borderWidth: 1,
-            borderColor: T.border,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            marginTop: 4,
-          }}
-        >
-          <TextInput
-            value={otherText}
-            onChangeText={onOtherTextChange}
-            placeholder="e.g., brindle-gray mix"
-            placeholderTextColor={T.medium}
-            style={{
-              flex: 1,
-              fontSize: 14,
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          />
-        </View>
-      )}
-    </View>
-  );
-}
-
-/* ── Match Card ───────────────────────────────────────────────── */
-export function MatchCard({
-  dog,
-  isTop,
-  onView,
-  onRequest,
-}: {
-  dog: (typeof MOCK_DOGS)[number];
-  isTop?: boolean;
-  onView: () => void;
-  onRequest: () => void;
-}) {
-  return (
-    <View
-      style={{
-        width: 260,
-        backgroundColor: T.white,
-        borderRadius: 16,
-        overflow: "hidden",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 4,
-      }}
-    >
-      {isTop && (
-        <View
-          style={{
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            backgroundColor: T.amber,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          <Award size={14} color="#fff" strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "700",
-              color: "#fff",
-              textAlign: "center",
-            }}
-          >
-            Top Match for Bella
-          </Text>
-        </View>
-      )}
-      <View style={{ position: "relative" }}>
-        <Image
-          source={{ uri: dog.images?.[0] }}
-          style={{ width: "100%", height: 160 }}
-          resizeMode="cover"
-        />
-      </View>
-      <View style={{ padding: 16, gap: 10 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            {dog.name}
-          </Text>
-          <VeriBadge tier={dog.verificationTier} />
-        </View>
-        <Text style={{ fontSize: 12, color: T.medium }}>
-          {dog.breed} • {dog.age} • {dog.sex}
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {dog.temperament.map((t) => (
-            <View
-              key={t}
-              style={{
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 12,
-                backgroundColor: T.bg,
-              }}
-            >
-              <Text style={{ fontSize: 12, color: T.dark }}>{t}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              backgroundColor: T.teal,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
-              {dog.owner.name.charAt(0)}
-            </Text>
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              flex: 1,
-            }}
-          >
-            <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.owner.name} •
-            </Text>
-            <MapPin size={10} color={T.medium} strokeWidth={2} />
-            <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.owner.location.split(",")[0]}
-            </Text>
-          </View>
-        </View>
-        <ScoreBar score={85} />
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 8,
-            marginTop: 4,
-            alignItems: "center",
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Syringe size={12} color={T.teal} strokeWidth={2} />
-            <Text style={{ fontSize: 11, color: T.medium }}>Vaccinated</Text>
-            <Check size={12} color={T.teal} strokeWidth={2.5} />
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Stethoscope size={12} color={T.teal} strokeWidth={2} />
-            <Text style={{ fontSize: 11, color: T.medium }}>Vet OK</Text>
-            <Check size={12} color={T.teal} strokeWidth={2.5} />
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <FileText size={12} color={T.teal} strokeWidth={2} />
-            <Text style={{ fontSize: 11, color: T.medium }}>Pedigree</Text>
-            <Check size={12} color={T.teal} strokeWidth={2.5} />
-          </View>
-        </View>
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-          <TouchableOpacity
-            onPress={onRequest}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 12,
-              backgroundColor: T.teal,
-              alignItems: "center",
-              flexDirection: "row",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <Send size={14} color="#fff" strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: "#fff",
-                fontFamily: FONT,
-              }}
-            >
-              Request
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onView}
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 12,
-              backgroundColor: T.white,
-              borderWidth: 1.5,
-              borderColor: T.teal,
-              alignItems: "center",
-              flexDirection: "row",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <Eye size={14} color={T.teal} strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "600",
-                color: T.teal,
-                fontFamily: FONT,
-              }}
-            >
-              View
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-/* ── Home Screen ─────────────────────────────────────────────── */
+/* ── Home Dashboard (Figure 10) ─────────────────────────────────── */
 export function HomeScreen() {
-  const { navigate, userName } = useV3();
-  const hour = new Date().getHours();
-  const g =
-    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const { navigate, myDogs, activeDog, setActiveDogId, notifications, unreadCount, openNotification, lastNotification } =
+    useApp();
+  const session = useSession();
+  const insets = useSafeAreaInsets();
+  const firstName = session.user.full_name.split(" ")[0] || session.user.full_name;
+  const district = districtOf(session.user.location);
 
-  const activity = [
-    {
-      Icon: Award,
-      t: "Bella's vaccination card was verified",
-      sub: "Dr. Santos confirmed your document",
-    },
-    {
-      Icon: Heart,
-      t: "New match request from Max (Golden Retriever)",
-      sub: "88% compatibility • Matina, Davao",
-    },
-    {
-      Icon: Calendar,
-      t: "Community meetup this Saturday in Davao City",
-      sub: "PawMatch Dog Owners Gathering",
-    },
-    {
-      Icon: Star,
-      t: "You received a 5-star reputation review",
-      sub: "From Carlo Reyes • Bruno's owner",
-    },
-  ];
+  const requests = useAsync(() => api.listMyRequests(), [lastNotification?.id]);
+  const verifiedNearby = useAsync(
+    () => api.countVerifiedDogs(session.user.id, district ?? undefined),
+    [session.user.id, district],
+  );
+  const top = useAsync(
+    async () => (activeDog ? (await api.recommendMatches(activeDog, {}, 3)).results : []),
+    [activeDog?.id],
+  );
+
+  const incomingPending = (requests.data ?? []).filter(
+    (r) => r.recipient_user_id === session.user.id && r.status === "pending",
+  ).length;
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  const refresh = () => {
+    requests.reload(true);
+    verifiedNearby.reload(true);
+    top.reload(true);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -614,348 +84,252 @@ export function HomeScreen() {
           alignItems: "center",
           justifyContent: "space-between",
           paddingHorizontal: 20,
-          paddingTop: 48,
+          paddingTop: Math.max(insets.top, 16) + 8,
           paddingBottom: 12,
           backgroundColor: T.white,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <PawPrint size={20} color={T.teal} strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "700",
-              color: T.teal,
-              fontFamily: FONT,
-            }}
-          >
-            PawMatch
-          </Text>
+          <PawPrint size={20} color={T.primary} strokeWidth={2} />
+          <Text style={{ fontSize: 18, color: T.primary, fontFamily: FONT_BOLD }}>PawMatch</Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TouchableOpacity
-            onPress={() => navigate("notifications")}
-            style={{ position: "relative" }}
-          >
-            <Bell size={20} color={T.dark} strokeWidth={1.5} />
-            <View
-              style={{
-                position: "absolute",
-                top: -4,
-                right: -4,
-                width: 12,
-                height: 12,
-                borderRadius: 6,
-                backgroundColor: T.coral,
-              }}
-            />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <TouchableOpacity onPress={() => navigate("requests")} accessibilityRole="button" accessibilityLabel="Requests and messages" hitSlop={8}>
+            <MessageCircle size={21} color={T.dark} strokeWidth={1.6} />
+            {incomingPending > 0 && <Dot />}
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => navigate("owner-profile")}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: T.teal,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}>
-              J
-            </Text>
+          <TouchableOpacity onPress={() => navigate("notifications")} accessibilityRole="button" accessibilityLabel="Notifications" hitSlop={8}>
+            <Bell size={21} color={T.dark} strokeWidth={1.6} />
+            {unreadCount > 0 && <Dot />}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigate("owner-profile")} accessibilityRole="button" accessibilityLabel="My profile">
+            <Avatar name={session.user.full_name} size={34} />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={T.primary} />}
       >
-        <View
-          style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}
-        >
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            {g}, {userName}
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
+          <Text style={{ fontSize: 21, color: T.dark, fontFamily: FONT_BOLD }}>
+            {greeting}, {firstName}
           </Text>
-          <Text style={{ fontSize: 14, marginTop: 2, color: T.medium }}>
-            Here's what's new for your dogs today.
+          <Text style={{ fontSize: 14, marginTop: 2, color: T.medium, fontFamily: FONT }}>
+            Here&apos;s what&apos;s new for your dogs today.
           </Text>
         </View>
 
-        <View
-          style={{
-            paddingHorizontal: 20,
-            marginBottom: 20,
-            flexDirection: "row",
-            gap: 12,
-          }}
-        >
+        <View style={{ paddingHorizontal: 20, marginBottom: 20, flexDirection: "row", gap: 12 }}>
           {[
-            { Icon: Heart, n: "3", t: "New Match Requests" },
-            { Icon: Check, n: "2", t: "Verified Near You" },
-            { Icon: Calendar, n: "1", t: "Event This Week" },
+            { Icon: Heart, n: incomingPending, t: "New Match Requests", go: () => navigate("requests") },
+            { Icon: CheckCircle, n: verifiedNearby.data ?? 0, t: district ? `Verified in ${district}` : "Verified Dogs", go: () => navigate("match") },
+            { Icon: Bell, n: unreadCount, t: "Unread Alerts", go: () => navigate("notifications") },
           ].map((s) => (
-            <View
+            <TouchableOpacity
               key={s.t}
-              style={{
-                flex: 1,
-                borderRadius: 12,
-                padding: 12,
-                backgroundColor: T.white,
-                alignItems: "center",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 8,
-                elevation: 2,
-              }}
+              onPress={s.go}
+              style={{ flex: 1, borderRadius: 14, padding: 12, backgroundColor: T.white, alignItems: "center", ...shadow }}
             >
-              <s.Icon size={24} color={T.teal} strokeWidth={1.5} />
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "700",
-                  marginTop: 4,
-                  color: T.teal,
-                }}
-              >
-                {s.n}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  marginTop: 2,
-                  textAlign: "center",
-                  color: T.medium,
-                  lineHeight: 16,
-                }}
-              >
+              <s.Icon size={22} color={T.primary} strokeWidth={1.5} />
+              <Text style={{ fontSize: 19, marginTop: 4, color: T.primary, fontFamily: FONT_BOLD }}>{s.n}</Text>
+              <Text style={{ fontSize: 11, marginTop: 2, textAlign: "center", color: T.medium, lineHeight: 15, fontFamily: FONT }}>
                 {s.t}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 
-        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-          <View
-            style={{
-              borderRadius: 24,
-              padding: 18,
-              backgroundColor: T.primary,
-              overflow: "hidden",
-            }}
-          >
-            <View
-              style={{
-                position: "absolute",
-                right: -24,
-                top: -20,
-                width: 120,
-                height: 120,
-                borderRadius: 60,
-                backgroundColor: "rgba(255,255,255,0.12)",
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                right: 18,
-                bottom: 14,
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: "rgba(255,255,255,0.16)",
-              }}
-            />
-            <View style={{ gap: 10 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <Sparkles size={18} color="#fff" strokeWidth={2} />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: "rgba(255,255,255,0.9)",
-                    letterSpacing: 0.6,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Breeding Match
-                </Text>
-              </View>
-              <Text
-                style={{
-                  fontSize: 20,
-                  lineHeight: 26,
-                  fontWeight: "800",
-                  color: "#fff",
-                  fontFamily: FONT,
-                }}
-              >
-                Build your preferred dog profile and instantly see 3 best
-                candidates.
-              </Text>
-              <Text
-                style={{
-                  fontSize: 13,
-                  lineHeight: 18,
-                  color: "rgba(255,255,255,0.88)",
-                }}
-              >
-                Choose breed, color, size or height preference, and temperament.
-              </Text>
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
-                <View style={{ flex: 1 }}>
-                  <Btn onClick={() => navigate("filter")}>Open Matcher</Btn>
-                </View>
-                <TouchableOpacity
-                  onPress={() => navigate("filter")}
-                  style={{
-                    width: 48,
-                    borderRadius: 14,
-                    borderWidth: 1.5,
-                    borderColor: "rgba(255,255,255,0.6)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <ChevronRight size={18} color="#fff" strokeWidth={2} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={{ marginBottom: 20 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 20,
-              marginBottom: 12,
-            }}
-          >
-            <Text
-              style={{ fontWeight: "700", color: T.dark, fontFamily: FONT }}
-            >
-              Your Top Matches Today
-            </Text>
-            <TouchableOpacity onPress={() => navigate("filter")}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: T.teal }}>
-                Open Matcher →
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}
-          >
-            {MOCK_DOGS.slice(0, 3).map((dog, i) => (
-              <MatchCard
-                key={dog.id}
-                dog={dog}
-                isTop={i === 0}
-                onView={() => navigate("match-profile", dog)}
-                onRequest={() => navigate("send-request", dog)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={{ paddingHorizontal: 20 }}>
-          <Text
-            style={{
-              fontWeight: "700",
-              marginBottom: 12,
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Recent Activity
-          </Text>
-          <View style={{ gap: 10 }}>
-            {activity.map((a, i) => (
-              <View
-                key={i}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 12,
-                  padding: 16,
-                  borderRadius: 16,
-                  backgroundColor: T.white,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.08,
-                  shadowRadius: 8,
-                  elevation: 2,
-                }}
+        {myDogs.length === 0 ? (
+          <NoDogPrompt />
+        ) : (
+          <>
+            <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => navigate("filter")}
+                style={{ borderRadius: 22, padding: 18, backgroundColor: T.primary, overflow: "hidden", gap: 8 }}
               >
                 <View
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: T.tealLight,
-                    alignItems: "center",
-                    justifyContent: "center",
+                    position: "absolute",
+                    right: -24,
+                    top: -20,
+                    width: 120,
+                    height: 120,
+                    borderRadius: 60,
+                    backgroundColor: "rgba(255,255,255,0.12)",
                   }}
-                >
-                  <a.Icon size={18} color={T.teal} strokeWidth={1.5} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{ fontSize: 14, fontWeight: "600", color: T.dark }}
-                  >
-                    {a.t}
-                  </Text>
-                  <Text style={{ fontSize: 12, marginTop: 2, color: T.medium }}>
-                    {a.sub}
+                />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Sparkles size={16} color="#fff" strokeWidth={2} />
+                  <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", fontFamily: FONT_BOLD, letterSpacing: 0.6 }}>
+                    BREEDING MATCH
                   </Text>
                 </View>
+                <Text style={{ fontSize: 19, lineHeight: 25, color: "#fff", fontFamily: FONT_BOLD }}>
+                  Set your preferred traits and instantly see the 3 best candidates.
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                  <Text style={{ color: "#fff", fontFamily: FONT_BOLD }}>Open Matcher</Text>
+                  <ChevronRight size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ paddingHorizontal: 20 }}>
+                <SectionTitle
+                  title="Your Top Matches Today"
+                  right={
+                    <TouchableOpacity onPress={() => navigate("match")}>
+                      <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD }}>Browse all →</Text>
+                    </TouchableOpacity>
+                  }
+                />
+                {myDogs.length > 1 && (
+                  <View style={{ marginBottom: 12 }}>
+                    <MyDogSelector dogs={myDogs} activeId={activeDog?.id} onSelect={setActiveDogId} />
+                  </View>
+                )}
               </View>
-            ))}
-          </View>
+              {top.loading ? (
+                <Loading />
+              ) : top.error ? (
+                <ErrorView message={top.error} onRetry={() => top.reload()} />
+              ) : (top.data ?? []).length === 0 ? (
+                <Card style={{ marginHorizontal: 20 }}>
+                  <EmptyState
+                    icon={Search}
+                    title="No compatible dogs yet"
+                    message={`No ${activeDog?.sex === "male" ? "female" : "male"} dogs are listed yet. Check back soon — you'll be alerted when a compatible match joins.`}
+                  />
+                </Card>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 6 }}>
+                  {(top.data ?? []).map((m, i) => (
+                    <MatchCard
+                      key={m.dog.id}
+                      match={m}
+                      width={270}
+                      banner={i === 0 ? `Top Match for ${activeDog?.name}` : undefined}
+                      onView={() => navigate("match-profile", { dogId: m.dog.id })}
+                      onRequest={() => navigate("send-request", { dogId: m.dog.id })}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </>
+        )}
+
+        <View style={{ paddingHorizontal: 20 }}>
+          <SectionTitle
+            title="Recent Activity"
+            right={
+              notifications.length > 0 ? (
+                <TouchableOpacity onPress={() => navigate("notifications")}>
+                  <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD }}>See all →</Text>
+                </TouchableOpacity>
+              ) : undefined
+            }
+          />
+          {notifications.length === 0 ? (
+            <Text style={{ color: T.medium, fontFamily: FONT, fontSize: 13 }}>
+              No activity yet. Requests, messages and verification results will appear here.
+            </Text>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {notifications.slice(0, 4).map((n) => (
+                <Card key={n.id} onPress={() => openNotification(n)} style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
+                    <Bell size={16} color={T.primary} strokeWidth={1.75} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, color: T.dark, fontFamily: n.read ? FONT : FONT_BOLD }}>{n.title}</Text>
+                    <Text style={{ fontSize: 12, marginTop: 2, color: T.medium, fontFamily: FONT }} numberOfLines={2}>
+                      {n.body}
+                    </Text>
+                    <Text style={{ fontSize: 11, marginTop: 4, color: T.light, fontFamily: FONT }}>{timeAgo(n.created_at)}</Text>
+                  </View>
+                </Card>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
   );
 }
 
-/* ── Match Discovery Screen ──────────────────────────────────── */
+function Dot() {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: -3,
+        right: -4,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: T.error,
+        borderWidth: 1.5,
+        borderColor: T.white,
+      }}
+    />
+  );
+}
+
+/* ── Browse / Search (Figure 12, FR4) ───────────────────────────── */
+const SIZES: Size[] = ["small", "medium", "large"];
+
 export function MatchScreen() {
-  const { navigate } = useV3();
+  const { navigate, myDogs, activeDog, setActiveDogId } = useApp();
+  const session = useSession();
+  const insets = useSafeAreaInsets();
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [nearMe, setNearMe] = useState(false);
+  const [size, setSize] = useState<Size | null>(null);
+  const district = districtOf(session.user.location);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const dogs = useAsync(
+    () =>
+      api.browseDogs({
+        excludeOwnerId: session.user.id,
+        search: debounced,
+        sex: activeDog ? (activeDog.sex === "male" ? "female" : "male") : undefined,
+        size: size ?? undefined,
+        verifiedOnly,
+        location: nearMe ? (district ?? "Davao") : undefined,
+      }),
+    [debounced, verifiedOnly, nearMe, size, activeDog?.id, district],
+  );
+
+  const ranked: RankedMatch[] = useMemo(() => {
+    const scored = api.scoreDogs(activeDog, dogs.data ?? []);
+    return activeDog ? scored.sort((a, b) => b.compatibility.exact - a.compatibility.exact) : scored;
+  }, [dogs.data, activeDog]);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          backgroundColor: T.white,
-        }}
-      >
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 12, backgroundColor: T.white, gap: 12 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
           <View
             style={{
               flex: 1,
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
-              paddingHorizontal: 16,
-              height: 48,
+              paddingHorizontal: 14,
+              height: 46,
               borderRadius: 12,
               backgroundColor: T.bg,
               borderWidth: 1,
@@ -964,806 +338,219 @@ export function MatchScreen() {
           >
             <Search size={18} color={T.medium} strokeWidth={1.5} />
             <TextInput
-              placeholder="Search dogs, breeds..."
-              placeholderTextColor={T.medium}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search dogs, breeds, colors..."
+              placeholderTextColor={T.light}
               style={{ flex: 1, fontSize: 14, color: T.dark, fontFamily: FONT }}
+              returnKeyType="search"
             />
           </View>
           <TouchableOpacity
             onPress={() => navigate("filter")}
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 12,
-              backgroundColor: T.teal,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            accessibilityRole="button" accessibilityLabel="Open breeding matcher"
+            style={{ width: 46, height: 46, borderRadius: 12, backgroundColor: T.primary, alignItems: "center", justifyContent: "center" }}
           >
-            <Settings size={20} color="#fff" strokeWidth={1.5} />
+            <SlidersHorizontal size={20} color="#fff" strokeWidth={1.75} />
           </TouchableOpacity>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
-        >
-          {(
-            [
-              { label: "Breed", active: true, Icon: PawPrint },
-              { label: "Size", active: false, Icon: TrendingUp },
-              { label: "Temp", active: false, Icon: Heart },
-              { label: "Verified", active: false, Icon: Check },
-              { label: "Near Me", active: false, Icon: MapPin },
-            ] satisfies FilterChipConfig[]
-          ).map(({ label, active, Icon }) => (
-            <TouchableOpacity
-              key={String(label)}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 16,
-                backgroundColor: active ? T.teal : T.white,
-                borderWidth: 1,
-                borderColor: active ? T.teal : T.border,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-              }}
-            >
-              <Icon
-                size={14}
-                color={active ? "#fff" : T.dark}
-                strokeWidth={1.5}
-              />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: active ? "#fff" : T.dark,
-                  fontFamily: FONT,
-                }}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          <Chip label="Verified" icon={ShieldCheck} active={verifiedOnly} onPress={() => setVerifiedOnly((v) => !v)} />
+          <Chip label={district ? `Near Me (${district})` : "Near Me"} icon={MapPin} active={nearMe} onPress={() => setNearMe((v) => !v)} />
+          {SIZES.map((s) => (
+            <Chip key={s} label={s[0].toUpperCase() + s.slice(1)} icon={Ruler} active={size === s} onPress={() => setSize(size === s ? null : s)} />
           ))}
+          <Chip label="Requests" icon={MessageCircle} onPress={() => navigate("requests")} />
         </ScrollView>
+        {myDogs.length > 1 && <MyDogSelector dogs={myDogs} activeId={activeDog?.id} onSelect={setActiveDogId} />}
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-          gap: 16,
-          paddingBottom: 80,
-        }}
+        contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 32 }}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={() => dogs.reload(true)} tintColor={T.primary} />}
+        keyboardShouldPersistTaps="handled"
       >
-        {MOCK_DOGS.map((dog, i) => (
-          <View
-            key={dog.id}
-            style={{
-              borderRadius: 16,
-              overflow: "hidden",
-              backgroundColor: T.white,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.1,
-              shadowRadius: 8,
-              elevation: 4,
-            }}
-          >
-            {i === 0 && (
-              <View
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 6,
-                  backgroundColor: T.amber,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-              >
-                <Award size={14} color="#fff" strokeWidth={2} />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: "#fff",
-                    textAlign: "center",
-                  }}
-                >
-                  Top Match for Bella
-                </Text>
-              </View>
-            )}
-            <Image
-              source={{ uri: dog.images?.[0] }}
-              style={{ width: "100%", height: 180 }}
-              resizeMode="cover"
+        {activeDog ? (
+          <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>
+            Showing {activeDog.sex === "male" ? "female" : "male"} dogs ranked by compatibility with {activeDog.name}.
+          </Text>
+        ) : (
+          <NoDogPrompt />
+        )}
+        {dogs.loading ? (
+          <Loading />
+        ) : dogs.error ? (
+          <ErrorView message={dogs.error} onRetry={() => dogs.reload()} />
+        ) : ranked.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="No dogs found"
+            message="Try a different search or remove some filters."
+          />
+        ) : (
+          ranked.map((m, i) => (
+            <MatchCard
+              key={m.dog.id}
+              match={m}
+              banner={activeDog && i === 0 && !debounced ? `Top Match for ${activeDog.name}` : undefined}
+              onView={() => navigate("match-profile", { dogId: m.dog.id })}
+              onRequest={() => navigate("send-request", { dogId: m.dog.id })}
             />
-            <View style={{ padding: 16, gap: 10 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 20,
-                    fontWeight: "700",
-                    color: T.dark,
-                    fontFamily: FONT,
-                  }}
-                >
-                  {dog.name}
-                </Text>
-                <VeriBadge tier={dog.verificationTier} />
-              </View>
-              <Text style={{ fontSize: 14, color: T.medium }}>
-                {dog.breed} • {dog.age} • {dog.sex}
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {dog.temperament.map((t) => (
-                  <View
-                    key={t}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                      borderRadius: 12,
-                      backgroundColor: T.bg,
-                    }}
-                  >
-                    <Text style={{ fontSize: 12, color: T.dark }}>{t}</Text>
-                  </View>
-                ))}
-              </View>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <View
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: T.teal,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text
-                    style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}
-                  >
-                    {dog.owner.name.charAt(0)}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    flex: 1,
-                  }}
-                >
-                  <Text style={{ fontSize: 12, color: T.medium }}>
-                    {dog.owner.name} •
-                  </Text>
-                  <MapPin size={10} color={T.medium} strokeWidth={2} />
-                  <Text style={{ fontSize: 12, color: T.medium }}>
-                    {dog.owner.location}
-                  </Text>
-                </View>
-              </View>
-              <ScoreBar score={85} />
-              <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
-                <TouchableOpacity
-                  onPress={() => navigate("send-request", dog)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    backgroundColor: T.teal,
-                    alignItems: "center",
-                    flexDirection: "row",
-                    justifyContent: "center",
-                    gap: 6,
-                  }}
-                >
-                  <Send size={16} color="#fff" strokeWidth={2} />
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: "#fff",
-                      fontFamily: FONT,
-                    }}
-                  >
-                    Request Match
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => navigate("match-profile", dog)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    backgroundColor: T.white,
-                    borderWidth: 1.5,
-                    borderColor: T.teal,
-                    alignItems: "center",
-                    flexDirection: "row",
-                    justifyContent: "center",
-                    gap: 6,
-                  }}
-                >
-                  <Eye size={16} color={T.teal} strokeWidth={2} />
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: T.teal,
-                      fontFamily: FONT,
-                    }}
-                  >
-                    View Profile
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </ScrollView>
     </View>
   );
 }
 
-/* ── Breeding Matcher Screen ────────────────────────────────── */
-type FilterPrefs = {
-  breed: string;
-  color: string;
-  colorOther: string;
-  size: string;
-  temperament: string;
-  sex: string;
-};
-
-const FILTER_SIZES = ["Any", "Small", "Medium", "Large"];
-const FILTER_SEXES = ["Any", "Male", "Female"];
-const FILTER_TEMPERAMENTS = [
-  "Any",
-  "Friendly",
-  "Calm",
-  "Playful",
-  "Active",
-  "Independent",
-];
-
-function normalizeText(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function rankDog(
-  dog: (typeof MOCK_DOGS)[number],
-  prefs: FilterPrefs,
-): RankedDog {
-  let score = 70; // Start with a base score since dog.score doesn't exist in the type
-  const reasons: string[] = [];
-
-  const breedPref = normalizeText(prefs.breed);
-  const colorPref = normalizeText(prefs.color);
-  const temperamentPref = normalizeText(prefs.temperament);
-  const sizePref = prefs.size;
-  const sexPref = prefs.sex;
-
-  if (breedPref) {
-    const breedMatch =
-      normalizeText(dog.breed).includes(breedPref) ||
-      breedPref.includes(normalizeText(dog.breed));
-    score += breedMatch ? 24 : -10;
-    reasons.push(breedMatch ? "breed match" : "breed close");
-  }
-
-  if (colorPref) {
-    const colorMatch =
-      normalizeText(dog.color).includes(colorPref) ||
-      colorPref.includes(normalizeText(dog.color));
-    score += colorMatch ? 16 : -6;
-    reasons.push(colorMatch ? "color match" : "color close");
-  }
-
-  if (sizePref !== "Any") {
-    const sizeMatch = dog.size === sizePref;
-    score += sizeMatch ? 14 : -6;
-    reasons.push(
-      sizeMatch ? `${sizePref} build` : `not ${sizePref.toLowerCase()}`,
-    );
-  }
-
-  if (temperamentPref !== "Any") {
-    const temperamentMatch = dog.temperament.some(
-      (item) => normalizeText(item) === temperamentPref,
-    );
-    score += temperamentMatch ? 18 : -5;
-    reasons.push(temperamentMatch ? temperamentPref : "temperament close");
-  }
-
-  if (sexPref !== "Any") {
-    const sexMatch = dog.sex === sexPref;
-    score += sexMatch ? 8 : -4;
-    reasons.push(sexMatch ? sexPref : `not ${sexPref.toLowerCase()}`);
-  }
-
-  return {
-    dog,
-    score: Math.max(35, Math.min(99, score)),
-    reasons: reasons.slice(0, 3),
-  };
-}
-
-function FilterChipRow({
-  label,
-  Icon,
-  items,
-  value,
-  onChange,
-}: {
-  label: string;
-  Icon: any;
-  items: string[];
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <View style={{ gap: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Icon size={16} color={T.dark} strokeWidth={1.7} />
-        <Text
-          style={{
-            fontSize: 14,
-            fontWeight: "700",
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        >
-          {label}
-        </Text>
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingRight: 8 }}
-      >
-        {items.map((item) => (
-          <Chip
-            key={item}
-            active={value === item}
-            onPress={() => onChange(item)}
-          >
-            {item}
-          </Chip>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
+/* ── Breeding Matcher (Figure 11) ───────────────────────────────── */
+type Prefs = { breed: string; color: string; size: Size | "any"; temperament: string; verifiedOnly: boolean };
+const EMPTY_PREFS: Prefs = { breed: "", color: "", size: "any", temperament: "", verifiedOnly: false };
 
 export function FilterScreen() {
-  const { goBack, navigate } = useV3();
-  const [prefs, setPrefs] = useState<FilterPrefs>({
-    breed: "",
-    color: "",
-    colorOther: "",
-    size: "Any",
-    temperament: "Any",
-    sex: "Any",
-  });
-  const [showResults, setShowResults] = useState(false);
+  const { navigate, goBack, myDogs, activeDog, setActiveDogId } = useApp();
+  const [prefs, setPrefs] = useState<Prefs>(EMPTY_PREFS);
+  const [results, setResults] = useState<RankedMatch[] | null>(null);
   const [selectedDogId, setSelectedDogId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
 
-  const rankedDogs = MOCK_DOGS.map((dog) => rankDog(dog, prefs))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-
-  const updatePref = (key: keyof FilterPrefs, value: string) => {
-    setPrefs((current) => ({ ...current, [key]: value }));
+  const update = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
+    setPrefs((p) => ({ ...p, [key]: value }));
   };
 
-  const handleColorChange = (colorValue: string, otherText?: string) => {
-    setPrefs((current) => ({
-      ...current,
-      color: colorValue,
-      colorOther: otherText || "",
-    }));
-  };
-
-  const handleGenerate = () => {
-    setShowResults(true);
-    if (!selectedDogId && rankedDogs[0]) {
-      setSelectedDogId(rankedDogs[0].dog.id);
+  const run = async () => {
+    if (!activeDog) return;
+    setLoading(true);
+    setError(undefined);
+    try {
+      const preferences: MatchPreferences = {
+        breed: prefs.breed || undefined,
+        color: prefs.color && prefs.color !== "Mixed / Multiple colors" ? prefs.color : undefined,
+        size: prefs.size,
+        temperament: prefs.temperament || undefined,
+        verifiedOnly: prefs.verifiedOnly,
+      };
+      const { results: r } = await api.recommendMatches(activeDog, preferences, 3);
+      setResults(r);
+      setSelectedDogId(r[0]?.dog.id ?? null);
+    } catch (e) {
+      setError(api.errorMessage(e));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setPrefs({
-      breed: "",
-      color: "",
-      colorOther: "",
-      size: "Any",
-      temperament: "Any",
-      sex: "Any",
-    });
-    setShowResults(false);
+  const reset = () => {
+    setPrefs(EMPTY_PREFS);
+    setResults(null);
     setSelectedDogId(null);
+    setError(undefined);
   };
+
+  const label = (text: string, Icon: typeof PawPrint) => (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <Icon size={15} color={T.dark} strokeWidth={1.75} />
+      <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT_BOLD }}>{text}</Text>
+    </View>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 16,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+      <Header
+        title="Breeding Matcher"
+        subtitle="Enter your ideal traits, then choose from the top 3 dogs."
+        onBack={goBack}
+        right={
           <TouchableOpacity
-            onPress={goBack}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: T.bg,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Breeding Matcher
-            </Text>
-            <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
-              Enter your ideal traits, then choose from the top 3 dogs.
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={handleReset}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 999,
-              backgroundColor: T.primaryLight,
-            }}
+            onPress={reset}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: T.primaryLight }}
           >
             <RefreshCw size={14} color={T.primaryDark} strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: T.primaryDark,
-                fontFamily: FONT,
-              }}
-            >
-              Reset
-            </Text>
+            <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT_BOLD }}>Reset</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        }
+      />
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 18,
-          paddingBottom: 140,
-          gap: 16,
-        }}
-      >
-        <View
-          style={{
-            borderRadius: 28,
-            padding: 18,
-            backgroundColor: T.primary,
-            overflow: "hidden",
-          }}
-        >
-          <View
-            style={{
-              position: "absolute",
-              right: -18,
-              top: -16,
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              backgroundColor: "rgba(255,255,255,0.12)",
-            }}
-          />
-          <View style={{ gap: 8 }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <Sparkles size={18} color="#fff" strokeWidth={2} />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "700",
-                  color: "rgba(255,255,255,0.9)",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.6,
-                }}
-              >
+      {myDogs.length === 0 ? (
+        <NoDogPrompt />
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          <Card style={{ gap: 4 }}>
+            <MyDogSelector dogs={myDogs} activeId={activeDog?.id} onSelect={(id) => { setActiveDogId(id); setResults(null); }} label="Find a partner for" />
+            {activeDog && (
+              <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, marginTop: 8 }}>
+                Only {activeDog.sex === "male" ? "female" : "male"} dogs are considered — sex compatibility is a
+                biological requirement for breeding.
               </Text>
-            </View>
-            <Text
-              style={{
-                fontSize: 22,
-                lineHeight: 28,
-                fontWeight: "800",
-                color: "#fff",
-                fontFamily: FONT,
-              }}
-            >
-              Find the best dog matches based on the traits you want.
-            </Text>
-            <Text
-              style={{
-                fontSize: 13,
-                lineHeight: 18,
-                color: "rgba(255,255,255,0.9)",
-              }}
-            >
-              Use the fields below to match breed, color, size or height/build,
-              temperament, and sex.
-            </Text>
-          </View>
-        </View>
+            )}
+          </Card>
 
-        <View
-          style={{
-            borderRadius: 24,
-            padding: 16,
-            backgroundColor: T.white,
-            gap: 14,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.08,
-            shadowRadius: 12,
-            elevation: 3,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Search size={16} color={T.dark} strokeWidth={1.8} />
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Tell us what you want
-            </Text>
-          </View>
-
-          <View style={{ gap: 12 }}>
-            <View style={{ gap: 8 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <PawPrint size={16} color={T.dark} strokeWidth={1.7} />
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: T.dark,
-                    fontFamily: FONT,
-                  }}
-                >
-                  Breed
-                </Text>
-              </View>
-              <View
-                style={{
-                  borderRadius: 16,
-                  paddingHorizontal: 14,
-                  height: 52,
-                  backgroundColor: T.bg,
-                  borderWidth: 1,
-                  borderColor: T.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                }}
-              >
-                <TextInput
-                  value={prefs.breed}
-                  onChangeText={(text) => updatePref("breed", text)}
-                  placeholder="Example: Shih Tzu or Golden Retriever"
-                  placeholderTextColor={T.medium}
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    color: T.dark,
-                    fontFamily: FONT,
-                  }}
-                />
-              </View>
+          <Card>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <Search size={16} color={T.dark} strokeWidth={1.8} />
+              <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD }}>Tell us what you want</Text>
             </View>
 
-            <View style={{ gap: 8 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <Palette size={16} color={T.dark} strokeWidth={1.7} />
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "700",
-                    color: T.dark,
-                    fontFamily: FONT,
-                  }}
-                >
-                  Color
-                </Text>
-              </View>
-              <ColorCombobox
-                value={prefs.color}
-                onChange={handleColorChange}
-                onOtherTextChange={(text) => updatePref("colorOther", text)}
-                otherText={prefs.colorOther}
+            {label("Breed", PawPrint)}
+            <BreedInput value={prefs.breed} onChange={(v) => update("breed", v)} placeholder="Any breed — e.g. Shih Tzu" />
+
+            {label("Color", Palette)}
+            <ColorCombobox value={prefs.color} onChange={(v) => update("color", v)} placeholder="Any color" />
+
+            {label("Height / Build", Ruler)}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 16 }}>
+              {(["any", ...SIZES] as const).map((s) => (
+                <Chip key={s} label={s === "any" ? "Any" : s[0].toUpperCase() + s.slice(1)} active={prefs.size === s} onPress={() => update("size", s)} />
+              ))}
+            </ScrollView>
+
+            {label("Temperament", Heart)}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 16 }}>
+              <Chip label="Any" active={!prefs.temperament} onPress={() => update("temperament", "")} />
+              {TEMPERAMENT_OPTIONS.map((t) => (
+                <Chip key={t} label={t} active={prefs.temperament === t} onPress={() => update("temperament", t)} />
+              ))}
+            </ScrollView>
+
+            {label("Verification", ShieldCheck)}
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 18 }}>
+              <Chip label="Any dog" active={!prefs.verifiedOnly} onPress={() => update("verifiedOnly", false)} />
+              <Chip label="Verified only" active={prefs.verifiedOnly} onPress={() => update("verifiedOnly", true)} />
+            </View>
+
+            <Btn title="Show my 3 best matches" icon={Sparkles} loading={loading} disabled={!activeDog} onPress={run} />
+          </Card>
+
+          {error ? (
+            <ErrorView message={error} onRetry={run} />
+          ) : results === null ? (
+            <Card style={{ gap: 6 }}>
+              <Text style={{ fontSize: 16, color: T.dark, fontFamily: FONT_BOLD }}>Ready when you are.</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: T.medium, fontFamily: FONT }}>
+                Tap the button above and the three most compatible dogs will appear here.
+              </Text>
+            </Card>
+          ) : results.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={Plus}
+                title="No dogs match these traits"
+                message="Loosen a filter (for example breed or color) and try again."
               />
-            </View>
-
-            <FilterChipRow
-              label="Height / Build"
-              Icon={Ruler}
-              items={FILTER_SIZES}
-              value={prefs.size}
-              onChange={(value) => updatePref("size", value)}
+            </Card>
+          ) : (
+            <FloatingMatchResults
+              matches={results}
+              forDogName={activeDog?.name ?? "your dog"}
+              selectedDogId={selectedDogId}
+              onSelectDog={setSelectedDogId}
+              onViewDog={(m) => navigate("match-profile", { dogId: m.dog.id })}
+              onRequestDog={(m) => navigate("send-request", { dogId: m.dog.id })}
             />
-            <FilterChipRow
-              label="Temperament"
-              Icon={Heart}
-              items={FILTER_TEMPERAMENTS}
-              value={prefs.temperament}
-              onChange={(value) => updatePref("temperament", value)}
-            />
-            <FilterChipRow
-              label="Sex"
-              Icon={Settings}
-              items={FILTER_SEXES}
-              value={prefs.sex}
-              onChange={(value) => updatePref("sex", value)}
-            />
-          </View>
-
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 2 }}>
-            <View style={{ flex: 1 }}>
-              <Btn onClick={handleGenerate}>Show my 3 best matches</Btn>
-            </View>
-            <TouchableOpacity
-              onPress={handleReset}
-              style={{
-                width: 52,
-                borderRadius: 16,
-                backgroundColor: T.white,
-                borderWidth: 1.5,
-                borderColor: T.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <RefreshCw size={16} color={T.dark} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View
-          style={{
-            borderRadius: 20,
-            padding: 14,
-            backgroundColor: T.white,
-            borderWidth: 1,
-            borderColor: T.border,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-              marginBottom: 8,
-            }}
-          >
-            Current focus
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8 }}
-          >
-            <Chip active={prefs.breed.length > 0}>
-              {prefs.breed || "Any breed"}
-            </Chip>
-            <Chip active={prefs.color.length > 0}>
-              {prefs.color || "Any color"}
-            </Chip>
-            <Chip active={prefs.size !== "Any"}>
-              {prefs.size === "Any" ? "Any height" : prefs.size}
-            </Chip>
-            <Chip active={prefs.temperament !== "Any"}>
-              {prefs.temperament === "Any"
-                ? "Any temperament"
-                : prefs.temperament}
-            </Chip>
-            <Chip active={prefs.sex !== "Any"}>
-              {prefs.sex === "Any" ? "Any sex" : prefs.sex}
-            </Chip>
-          </ScrollView>
-        </View>
-
-        {showResults ? (
-          <FloatingMatchResults
-            rankedDogs={rankedDogs}
-            selectedDogId={selectedDogId}
-            onSelectDog={setSelectedDogId}
-            onViewDog={(dog: RankedDog["dog"]) =>
-              navigate("match-profile", dog)
-            }
-            onRequestDog={(dog: RankedDog["dog"]) =>
-              navigate("send-request", dog)
-            }
-            onContinueSelectedDog={(dog: RankedDog["dog"]) =>
-              navigate("conversation", dog)
-            }
-          />
-        ) : (
-          <View
-            style={{
-              borderRadius: 24,
-              padding: 18,
-              backgroundColor: T.white,
-              borderWidth: 1,
-              borderColor: T.border,
-              gap: 8,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Ready when you are.
-            </Text>
-            <Text style={{ fontSize: 13, lineHeight: 18, color: T.medium }}>
-              Tap the main button above and the three strongest dogs will appear
-              here.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }

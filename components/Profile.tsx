@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Award,
   Bell,
   Calendar,
@@ -8,535 +7,440 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Dna,
   Edit,
   FileCheck,
   FileText,
+  HelpCircle,
+  KeyRound,
   LogOut,
   MapPin,
+  MessageCircle,
   MessageSquare,
   PawPrint,
   Plus,
   Send,
   Settings,
+  ShieldCheck,
   Star,
   Stethoscope,
-  Syringe,
-  User
+  Trash2,
+  Upload,
+  User,
+  X,
 } from "lucide-react-native";
-import { useState } from "react";
-import { Image, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useMemo, useState } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
+  capitalize,
+  DOC_TYPES,
   FONT,
-  MOCK_DOGS,
+  FONT_BOLD,
+  FONT_MEDIUM,
+  formatAge,
+  formatDate,
+  shadow,
+  SUBMISSION_STATUS,
   T,
-  useV3,
-  VeriBadge
-} from "../contexts/AppContext";
+  TIER_DESCRIPTIONS,
+} from "../constants/theme";
+import { useApp, useSession } from "../contexts/AppContext";
+import { useAsync } from "../hooks/useAsync";
+import * as api from "../services/api";
+import { computeCompatibility, explainCompatibility } from "../services/compatibility";
+import { pickImage, type PickedFile } from "../services/media";
+import type { Dog, DocType, Sex, Size, Submission } from "../types";
+import { BreedInput, ColorCombobox, MyDogSelector, TemperamentPicker, TemperamentTags, TrustIndicators } from "./DogWidgets";
+import { CompatibilityBreakdownCard } from "./FloatingMatchResults";
+import {
+  Avatar,
+  Btn,
+  Card,
+  confirmAction,
+  DogImage,
+  EmptyState,
+  ErrorView,
+  Field,
+  Header,
+  InfoRow,
+  ListItem,
+  Loading,
+  ScoreBar,
+  SectionTitle,
+  showMessage,
+  Stars,
+  Tag,
+  VeriBadge,
+} from "./ui";
 
-/* ── Dog Profile (My Dog) ────────────────────────────────────── */
+/* ── Shared pieces ──────────────────────────────────────────────── */
+function TabBar<K extends string>({ tabs, value, onChange }: { tabs: [K, string, typeof FileText][]; value: K; onChange: (k: K) => void }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        marginHorizontal: 20,
+        marginVertical: 16,
+        borderRadius: 12,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: T.border,
+      }}
+    >
+      {tabs.map(([id, label, Icon]) => (
+        <TouchableOpacity
+          key={id}
+          onPress={() => onChange(id)}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: value === id }}
+          style={{
+            flex: 1,
+            paddingVertical: 10,
+            backgroundColor: value === id ? T.primary : T.white,
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          <Icon size={14} color={value === id ? "#fff" : T.medium} strokeWidth={1.6} />
+          <Text style={{ fontSize: 12, color: value === id ? "#fff" : T.medium, fontFamily: FONT_BOLD }}>{label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+/** Newest submission per document type, except that a verified one always wins. Input is newest-first. */
+function latestByType(submissions: Submission[]) {
+  const map = new Map<DocType, Submission>();
+  for (const s of submissions) {
+    const current = map.get(s.submission_type);
+    if (!current || (current.status !== "vet_verified" && s.status === "vet_verified")) {
+      map.set(s.submission_type, s);
+    }
+  }
+  return map;
+}
+
+function DogHeaderBlock({ dog }: { dog: Dog }) {
+  return (
+    <View style={{ alignItems: "center", paddingTop: 20, paddingBottom: 18, backgroundColor: T.white }}>
+      <View>
+        <DogImage uri={dog.img} width={112} height={112} radius={56} style={{ borderWidth: 4, borderColor: T.primary }} />
+        <View style={{ position: "absolute", bottom: -6, alignSelf: "center" }}>
+          <VeriBadge tier={dog.tier} />
+        </View>
+      </View>
+      <Text style={{ fontSize: 23, marginTop: 14, color: T.dark, fontFamily: FONT_BOLD }}>{dog.name}</Text>
+      <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT }}>
+        {dog.breed} • {formatAge(dog.age)} • {capitalize(dog.sex)}
+      </Text>
+    </View>
+  );
+}
+
+function BasicInfoCard({ dog }: { dog: Dog }) {
+  return (
+    <Card>
+      <InfoRow label="Breed" value={dog.breed} />
+      <InfoRow label="Age" value={formatAge(dog.age)} />
+      <InfoRow label="Sex" value={capitalize(dog.sex)} />
+      <InfoRow label="Size" value={capitalize(dog.size)} />
+      <InfoRow label="Color" value={dog.color || "—"} />
+      <InfoRow
+        label="Rating"
+        value={dog.reviews > 0 ? `${dog.rating.toFixed(1)} ★ (${dog.reviews})` : "No reviews yet"}
+        last={dog.temperament.length === 0 && !dog.description}
+      />
+      {dog.temperament.length > 0 && (
+        <View style={{ paddingTop: 10, gap: 8 }}>
+          <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT }}>Temperament</Text>
+          <TemperamentTags traits={dog.temperament} />
+        </View>
+      )}
+      {dog.description ? (
+        <View style={{ paddingTop: 12 }}>
+          <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT, marginBottom: 4 }}>About</Text>
+          <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT, lineHeight: 20 }}>{dog.description}</Text>
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+function TierCard({ dog, onAudit }: { dog: Dog; onAudit: () => void }) {
+  return (
+    <View style={{ padding: 16, borderRadius: 16, backgroundColor: T.primaryLight, gap: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Award size={16} color={T.primaryDark} strokeWidth={1.75} />
+        <Text style={{ fontSize: 14, color: T.primaryDark, fontFamily: FONT_BOLD }}>Verification Status</Text>
+      </View>
+      <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_MEDIUM }}>{TIER_DESCRIPTIONS[dog.tier] ?? ""}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT }}>Trust score</Text>
+        <View style={{ flex: 1 }}>
+          <ScoreBar score={dog.score} showLabel />
+        </View>
+      </View>
+      <TouchableOpacity onPress={onAudit} style={{ marginTop: 4 }}>
+        <Text style={{ fontSize: 13, color: T.primaryDark, fontFamily: FONT_BOLD, textDecorationLine: "underline" }}>
+          View Audit Trail →
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/* ── My Dog profile (Figure 15) ─────────────────────────────────── */
 export function DogProfile() {
-  const { navigate, goBack, selectedDog, setSelectedDog } = useV3();
-  const [tab, setTab] = useState<"info" | "health" | "gallery">("info");
+  const { navigate, params, myDogs, dogsLoaded, reloadDogs, setActiveDogId, showToast, lastNotification } = useApp();
+  const session = useSession();
+  const [tab, setTab] = useState<"info" | "health" | "gallery">(params.tab ?? "info");
+  const initialIndex = Math.max(0, myDogs.findIndex((d) => d.id === params.dogId));
+  const [index, setIndex] = useState(initialIndex);
+  const [busy, setBusy] = useState(false);
+  const dog = myDogs[Math.min(index, myDogs.length - 1)];
 
-  // Get current dog index
-  const currentDogIndex = selectedDog ? MOCK_DOGS.findIndex(d => d.id === selectedDog.id) : 0;
-  const [activeDogIndex, setActiveDogIndex] = useState(currentDogIndex >= 0 ? currentDogIndex : 0);
+  const submissions = useAsync(
+    () => (dog ? api.listDogSubmissions(dog.id) : Promise.resolve([])),
+    [dog?.id, lastNotification?.id],
+  );
 
-  // Use the active dog based on current index
-  const dog = MOCK_DOGS[activeDogIndex] || MOCK_DOGS[0];
+  if (!dogsLoaded) return <Loading />;
+  if (!dog) {
+    return (
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
+        <Header title="My Dogs" icon={PawPrint} />
+        <EmptyState
+          icon={PawPrint}
+          title="No dogs yet"
+          message="Add your dog's profile with breed, age, sex and temperament to start receiving compatible matches."
+          actionLabel="Add Dog Profile"
+          onAction={() => navigate("add-dog")}
+        />
+      </View>
+    );
+  }
 
-  const goToNextDog = () => {
-    if (activeDogIndex < MOCK_DOGS.length - 1) {
-      const newIndex = activeDogIndex + 1;
-      setActiveDogIndex(newIndex);
-      setSelectedDog(MOCK_DOGS[newIndex]);
+  const go = (next: number) => {
+    setIndex(next);
+    setActiveDogId(myDogs[next].id);
+  };
+
+  const addPhoto = async () => {
+    const file = await pickImage(false);
+    if (!file) return;
+    setBusy(true);
+    try {
+      const url = await api.uploadDogPhoto(session.user.id, file.uri, file.mimeType);
+      await api.updateDog(dog.id, dog.img ? { photos: [...dog.photos, url] } : { img: url });
+      await reloadDogs();
+      showToast("Photo added", undefined, "success");
+    } catch (e) {
+      showMessage("Upload failed", api.errorMessage(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const goToPreviousDog = () => {
-    if (activeDogIndex > 0) {
-      const newIndex = activeDogIndex - 1;
-      setActiveDogIndex(newIndex);
-      setSelectedDog(MOCK_DOGS[newIndex]);
+  const removePhoto = (url: string) =>
+    confirmAction("Remove photo?", "This photo will be removed from the gallery.", "Remove", async () => {
+      try {
+        if (url === dog.img) {
+          const [next, ...rest] = dog.photos;
+          await api.updateDog(dog.id, { img: next ?? null, photos: rest });
+        } else {
+          await api.updateDog(dog.id, { photos: dog.photos.filter((p) => p !== url) });
+        }
+        await reloadDogs();
+      } catch (e) {
+        showMessage("Couldn't remove photo", api.errorMessage(e));
+      }
+    }, true);
+
+  const makeMain = async (url: string) => {
+    try {
+      await api.updateDog(dog.id, { img: url, photos: [...(dog.img ? [dog.img] : []), ...dog.photos.filter((p) => p !== url)] });
+      await reloadDogs();
+    } catch (e) {
+      showMessage("Couldn't update photo", api.errorMessage(e));
     }
   };
+
+  const removeDog = () =>
+    confirmAction(
+      `Delete ${dog.name}?`,
+      "This permanently deletes the profile, its verification documents and its match requests.",
+      "Delete",
+      async () => {
+        try {
+          await api.deleteDog(dog.id);
+          await reloadDogs();
+          setIndex(0);
+          showToast(`${dog.name} was deleted`);
+        } catch (e) {
+          showMessage("Couldn't delete", api.errorMessage(e));
+        }
+      },
+      true,
+    );
+
+  const byType = latestByType(submissions.data ?? []);
+  const gallery = [dog.img, ...dog.photos].filter(Boolean) as string[];
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TouchableOpacity
-            onPress={goToPreviousDog}
-            disabled={activeDogIndex === 0}
-            style={{ opacity: activeDogIndex === 0 ? 0.3 : 1 }}
-          >
-            <ChevronLeft size={20} color={T.dark} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            {dog.name}'s Profile
-          </Text>
-          <TouchableOpacity
-            onPress={goToNextDog}
-            disabled={activeDogIndex === MOCK_DOGS.length - 1}
-            style={{ opacity: activeDogIndex === MOCK_DOGS.length - 1 ? 0.3 : 1 }}
-          >
-            <ChevronRight size={20} color={T.dark} strokeWidth={1.5} />
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity>
-          <Edit size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Dog pagination dots */}
-      {MOCK_DOGS.length > 1 && (
-        <View style={{
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          paddingVertical: 12,
-          backgroundColor: T.white,
-          gap: 6
-        }}>
-          {MOCK_DOGS.map((_, index) => (
+      <Header
+        title={`${dog.name}'s Profile`}
+        icon={PawPrint}
+        right={
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <TouchableOpacity onPress={() => index > 0 && go(index - 1)} disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} accessibilityRole="button" accessibilityLabel="Previous dog">
+              <ChevronLeft size={22} color={T.dark} />
+            </TouchableOpacity>
             <TouchableOpacity
-              key={index}
-              onPress={() => {
-                setActiveDogIndex(index);
-                setSelectedDog(MOCK_DOGS[index]);
-              }}
-              style={{
-                width: index === activeDogIndex ? 24 : 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: index === activeDogIndex ? T.teal : T.border,
-              }}
-            />
-          ))}
-        </View>
-      )}
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 80 }}
-      >
-        {/* Dog avatar */}
-        <View
-          style={{
-            alignItems: "center",
-            paddingTop: 24,
-            paddingBottom: 20,
-            backgroundColor: T.white,
-          }}
-        >
-          <View style={{ position: "relative", marginBottom: 12 }}>
-            <Image
-              source={{ uri: dog.images?.[0] }}
-              style={{
-                width: 112,
-                height: 112,
-                borderRadius: 56,
-                borderWidth: 4,
-                borderColor: T.teal,
-              }}
-              resizeMode="cover"
-            />
-            <View style={{ position: "absolute", bottom: 4, right: 4 }}>
-              <VeriBadge tier={dog.verificationTier} />
-            </View>
+              onPress={() => index < myDogs.length - 1 && go(index + 1)}
+              disabled={index === myDogs.length - 1}
+              style={{ opacity: index === myDogs.length - 1 ? 0.3 : 1 }}
+              accessibilityRole="button" accessibilityLabel="Next dog"
+            >
+              <ChevronRight size={22} color={T.dark} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigate("edit-dog", { dogId: dog.id })} accessibilityRole="button" accessibilityLabel="Edit dog">
+              <Edit size={20} color={T.dark} strokeWidth={1.6} />
+            </TouchableOpacity>
           </View>
-          <Text
-            style={{
-              fontSize: 24,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            {dog.name}
-          </Text>
-          <Text style={{ fontSize: 14, color: T.medium }}>
-            {dog.breed} • {dog.age} years • {dog.sex}
-          </Text>
-        </View>
+        }
+      />
 
-        {/* Tabs */}
-        <View
-          style={{
-            flexDirection: "row",
-            marginHorizontal: 20,
-            marginTop: 16,
-            borderRadius: 12,
-            overflow: "hidden",
-            borderWidth: 1,
-            borderColor: T.border,
-            marginBottom: 16,
-          }}
-        >
-          {([
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        {myDogs.length > 1 && (
+          <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, paddingTop: 12, backgroundColor: T.white }}>
+            {myDogs.map((d, i) => (
+              <TouchableOpacity
+                key={d.id}
+                onPress={() => go(i)}
+                accessibilityRole="button" accessibilityLabel={`Show ${d.name}`}
+                style={{ width: i === index ? 24 : 8, height: 8, borderRadius: 4, backgroundColor: i === index ? T.primary : T.border }}
+              />
+            ))}
+          </View>
+        )}
+        <DogHeaderBlock dog={dog} />
+        <TabBar
+          tabs={[
             ["info", "Basic Info", FileText],
             ["health", "Health", Stethoscope],
             ["gallery", "Gallery", Camera],
-          ] as const).map(([id, label, Icon]) => (
-            <TouchableOpacity
-              key={id as string}
-              onPress={() => setTab(id as any)}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                backgroundColor: tab === id ? T.teal : T.white,
-                alignItems: "center",
-                flexDirection: "row",
-                justifyContent: "center",
-                gap: 6,
-              }}
-            >
-              {/* @ts-ignore */}
-              <Icon
-                size={14}
-                color={tab === id ? "#fff" : T.medium}
-                strokeWidth={1.5}
-              />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color: tab === id ? "#fff" : T.medium,
-                  fontFamily: FONT,
-                }}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
 
         {tab === "info" && (
           <View style={{ paddingHorizontal: 20, gap: 12 }}>
-            <View
-              style={{
-                borderRadius: 16,
-                padding: 16,
-                backgroundColor: T.white,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 8,
-                elevation: 2,
-              }}
-            >
-              {[
-                ["Breed", dog.breed],
-                ["Age", `${dog.age} years`],
-                ["Sex", dog.sex.charAt(0).toUpperCase() + dog.sex.slice(1)],
-                ["Size", dog.size.charAt(0).toUpperCase() + dog.size.slice(1)],
-                ["Color", dog.color],
-              ].map(([k, v], i, arr) => (
-                <View
-                  key={k}
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    paddingVertical: 10,
-                    borderBottomWidth: i < arr.length - 1 ? 1 : 0,
-                    borderBottomColor: T.bg,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, color: T.medium }}>{k}</Text>
-                  <Text
-                    style={{ fontSize: 14, fontWeight: "600", color: T.dark }}
-                  >
-                    {v}
-                  </Text>
-                </View>
-              ))}
-              <View style={{ paddingTop: 10 }}>
-                <Text
-                  style={{ fontSize: 14, color: T.medium, marginBottom: 8 }}
-                >
-                  Temperament
-                </Text>
-                <View
-                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
-                >
-                  {dog.temperament.map((t) => (
-                    <View
-                      key={t}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 4,
-                        borderRadius: 12,
-                        backgroundColor: T.tealLight,
-                      }}
-                    >
-                      <Text style={{ fontSize: 12, color: T.teal }}>{t}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+            <BasicInfoCard dog={dog} />
+            <Btn title="Find matches for this dog" icon={Star} onPress={() => { setActiveDogId(dog.id); navigate("filter"); }} />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Btn title="Add another dog" icon={Plus} variant="outline" onPress={() => navigate("add-dog")} style={{ flex: 1 }} />
+              <Btn title="Delete" icon={Trash2} variant="danger" onPress={removeDog} />
             </View>
           </View>
         )}
 
         {tab === "health" && (
           <View style={{ paddingHorizontal: 20, gap: 12 }}>
-            {[
-              {
-                Icon: Syringe,
-                t: "Vaccination Card",
-                s: "verified",
-                by: "Dr. Santos, DVM",
-                date: "Jan 2025",
-              },
-              {
-                Icon: Stethoscope,
-                t: "Vet Health Clearance",
-                s: "verified",
-                by: "Dr. Reyes, DVM",
-                date: "Feb 2025",
-              },
-              {
-                Icon: FileCheck,
-                t: "Pedigree Papers",
-                s: "pending",
-                by: null,
-                date: null,
-              },
-              {
-                Icon: Dna,
-                t: "DNA / Genetic Test",
-                s: "upload",
-                by: null,
-                date: null,
-              },
-            ].map((d) => (
-              <View
-                key={d.t}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: 16,
-                  borderRadius: 16,
-                  backgroundColor: T.white,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.08,
-                  shadowRadius: 8,
-                  elevation: 2,
-                }}
-              >
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: T.tealLight,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <d.Icon size={18} color={T.teal} strokeWidth={1.5} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{ fontSize: 14, fontWeight: "600", color: T.dark }}
-                  >
-                    {d.t}
-                  </Text>
-                  {d.by && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 4,
-                        marginTop: 2,
-                      }}
-                    >
-                      <CheckCircle size={12} color={T.teal} strokeWidth={2} />
-                      <Text style={{ fontSize: 12, color: T.medium }}>
-                        Verified by {d.by} • {d.date}
-                      </Text>
+            {submissions.loading ? (
+              <Loading />
+            ) : submissions.error ? (
+              <ErrorView message={submissions.error} onRetry={() => submissions.reload()} />
+            ) : (
+              DOC_TYPES.map((d) => {
+                const s = byType.get(d.type);
+                return (
+                  <Card key={d.type} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
+                      <FileCheck size={17} color={T.primary} strokeWidth={1.6} />
                     </View>
-                  )}
-                </View>
-                {d.s === "verified" && (
-                  <View
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      borderRadius: 12,
-                      backgroundColor: T.tealLight,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <CheckCircle size={12} color={T.teal} strokeWidth={2} />
-                    <Text
-                      style={{ fontSize: 12, fontWeight: "700", color: T.teal }}
-                    >
-                      Verified
-                    </Text>
-                  </View>
-                )}
-                {d.s === "pending" && (
-                  <View
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      borderRadius: 12,
-                      backgroundColor: T.amberLight,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <Clock size={12} color="#a06000" strokeWidth={2} />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: "#a06000",
-                      }}
-                    >
-                      Pending
-                    </Text>
-                  </View>
-                )}
-                {d.s === "upload" && (
-                  <TouchableOpacity
-                    onPress={() => navigate("verify-upload")}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 4,
-                      borderRadius: 12,
-                      backgroundColor: T.tealLight,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <Plus size={12} color={T.teal} strokeWidth={2} />
-                    <Text
-                      style={{ fontSize: 12, fontWeight: "700", color: T.teal }}
-                    >
-                      Upload
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-            {/* Verification tier */}
-            <View
-              style={{
-                padding: 16,
-                borderRadius: 16,
-                backgroundColor: T.tealLight,
-                borderWidth: 1,
-                borderColor: T.teal + "30",
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  marginBottom: 4,
-                }}
-              >
-                <Award size={16} color={T.teal} strokeWidth={1.5} />
-                <Text
-                  style={{ fontSize: 14, fontWeight: "700", color: T.teal }}
-                >
-                  Verification Status
-                </Text>
-              </View>
-              <Text
-                style={{ fontSize: 14, fontWeight: "700", color: T.tealDark }}
-              >
-                TIER 2 — Expert Verified
-              </Text>
-              <Text style={{ fontSize: 12, color: T.teal, marginTop: 4 }}>
-                Verified by Dr. Patricia Reyes, Licensed Vet • March 2025
-              </Text>
-              <TouchableOpacity style={{ marginTop: 8 }}>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    textDecorationLine: "underline",
-                    color: T.teal,
-                  }}
-                >
-                  View Audit Trail →
-                </Text>
-              </TouchableOpacity>
-            </View>
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>{d.label}</Text>
+                      {s?.status === "vet_verified" && (
+                        <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>
+                          Verified by {s.verifier_name} • {formatDate(s.reviewed_at)}
+                        </Text>
+                      )}
+                      {s?.status === "owner_submitted" && (
+                        <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>With {s.verifier_name} for review</Text>
+                      )}
+                      {s?.status === "verification_failed" && (
+                        <Text style={{ fontSize: 12, color: T.error, fontFamily: FONT }}>Remarks: {s.notes}</Text>
+                      )}
+                    </View>
+                    {s && s.status !== "verification_failed" ? (
+                      <Tag label={SUBMISSION_STATUS[s.status].label} tone={SUBMISSION_STATUS[s.status].tone} />
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => navigate("verify-upload", { dogId: dog.id, type: d.type })}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: T.primaryLight }}
+                      >
+                        <Upload size={12} color={T.primaryDark} strokeWidth={2} />
+                        <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT_BOLD }}>
+                          {s ? "Re-upload" : "Upload"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </Card>
+                );
+              })
+            )}
+            <TierCard dog={dog} onAudit={() => navigate("audit-trail", { dogId: dog.id })} />
           </View>
         )}
 
         {tab === "gallery" && (
           <View style={{ paddingHorizontal: 20 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 8,
-              }}
-            >
-              {[dog.images?.[0], dog.images?.[0], dog.images?.[0]].filter(Boolean).map((img, i) => (
-                <Image
-                  key={i}
-                  source={{ uri: img }}
-                  style={{
-                    width: "31%",
-                    height: 100,
-                    borderRadius: 12,
-                  }}
-                  resizeMode="cover"
-                />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              {gallery.map((url) => (
+                <View key={url} style={{ width: "31%" }}>
+                  <TouchableOpacity onPress={() => url !== dog.img && makeMain(url)} activeOpacity={0.8}>
+                    <DogImage uri={url} width="100%" height={104} />
+                  </TouchableOpacity>
+                  {url === dog.img && (
+                    <View style={{ position: "absolute", left: 6, bottom: 6 }}>
+                      <Tag label="Profile" tone="brand" />
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => removePhoto(url)}
+                    accessibilityRole="button" accessibilityLabel="Remove photo"
+                    style={{ position: "absolute", right: 4, top: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <X size={13} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               ))}
               <TouchableOpacity
+                onPress={addPhoto}
+                disabled={busy}
                 style={{
                   width: "31%",
-                  height: 100,
+                  height: 104,
                   borderRadius: 12,
-                  backgroundColor: T.tealLight,
+                  backgroundColor: T.primaryLight,
                   borderWidth: 2,
-                  borderColor: T.teal + "50",
+                  borderColor: T.primary + "60",
                   borderStyle: "dashed",
                   alignItems: "center",
                   justifyContent: "center",
+                  gap: 4,
                 }}
               >
-                <Plus size={24} color={T.teal} strokeWidth={1.5} />
+                {busy ? <Text style={{ color: T.primary, fontFamily: FONT }}>Uploading…</Text> : <Plus size={24} color={T.primary} strokeWidth={1.5} />}
               </TouchableOpacity>
             </View>
+            <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, marginTop: 12 }}>
+              Tap a photo to make it the profile photo.
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -544,386 +448,305 @@ export function DogProfile() {
   );
 }
 
-/* ── Owner Profile ─────────────────────────────────────────────── */
-export function OwnerProfile() {
-  const { navigate, goBack, setUser } = useV3();
+/* ── Add / Edit dog ─────────────────────────────────────────────── */
+function DogForm({ existing }: { existing?: Dog }) {
+  const { goBack, replace, reloadDogs, setActiveDogId, showToast } = useApp();
+  const session = useSession();
+  const [form, setForm] = useState({
+    name: existing?.name ?? "",
+    breed: existing?.breed ?? "",
+    age: existing ? String(existing.age) : "",
+    sex: (existing?.sex ?? "female") as Sex,
+    size: (existing?.size ?? "medium") as Size,
+    color: existing?.color ?? "",
+    temperament: existing?.temperament ?? [],
+    description: existing?.description ?? "",
+  });
+  const [photo, setPhoto] = useState<PickedFile | null>(null);
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [saving, setSaving] = useState(false);
 
-  const handleLogout = () => {
-    // Clear user data
-    setUser(null);
-    // Navigate to login screen
-    navigate("login");
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  const choosePhoto = async () => {
+    const file = await pickImage(true);
+    if (file) setPhoto(file);
   };
 
-  const settings = [
-    { Icon: Bell, t: "Notification Preferences", s: "notifications" as const },
-    { Icon: FileText, t: "Privacy & Security", s: "settings" as const },
-    { Icon: FileCheck, t: "My Documents", s: "verify-upload" as const },
-    { Icon: User, t: "Help & Support", s: "settings" as const },
-  ];
+  const submit = async () => {
+    const age = Number(form.age.replace(",", "."));
+    const e: Record<string, string | undefined> = {};
+    if (!form.name.trim()) e.name = "Enter your dog's name";
+    if (!form.breed.trim()) e.breed = "Enter the breed (use Aspin or Mixed Breed if unsure)";
+    if (!form.age.trim() || Number.isNaN(age) || age < 0 || age > 25) e.age = "Enter an age between 0 and 25 years";
+    if (!form.color.trim()) e.color = "Choose a color";
+    if (form.temperament.length === 0) e.temperament = "Pick at least one temperament trait";
+    setErrors(e);
+    if (Object.values(e).some(Boolean)) {
+      showMessage("Check the form", Object.values(e).filter(Boolean)[0]);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let img = existing?.img ?? null;
+      let photos = existing?.photos ?? [];
+      if (photo) {
+        const url = await api.uploadDogPhoto(session.user.id, photo.uri, photo.mimeType);
+        if (img) photos = [img, ...photos];
+        img = url;
+      }
+      const input = {
+        name: form.name.trim(),
+        breed: form.breed.trim(),
+        age: Math.round(age * 10) / 10,
+        sex: form.sex,
+        size: form.size,
+        color: form.color.trim(),
+        temperament: form.temperament,
+        description: form.description.trim(),
+        img,
+        photos,
+      };
+      const dog = existing ? await api.updateDog(existing.id, input) : await api.createDog(input);
+      await reloadDogs();
+      setActiveDogId(dog.id);
+      if (!existing) api.notifyCompatibleMatches(dog.id);
+      showToast(existing ? "Profile updated" : `${dog.name} was added`, existing ? undefined : "Verify their documents to earn a trust badge.", "success");
+      replace("dog-profile", { dogId: dog.id });
+    } catch (err) {
+      showMessage("Couldn't save", api.errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const preview = photo?.uri ?? existing?.img ?? null;
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Header title={existing ? `Edit ${existing.name}` : "Add New Dog"} icon={PawPrint} onBack={goBack} />
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <View style={{ alignItems: "center", marginBottom: 22 }}>
+          <TouchableOpacity onPress={choosePhoto} accessibilityRole="button" accessibilityLabel="Choose dog photo">
+            {preview ? (
+              <DogImage uri={preview} width={120} height={120} radius={60} style={{ borderWidth: 3, borderColor: T.primary }} />
+            ) : (
+              <View
+                style={{
+                  width: 120,
+                  height: 120,
+                  borderRadius: 60,
+                  backgroundColor: T.primaryLight,
+                  borderWidth: 3,
+                  borderColor: T.primary,
+                  borderStyle: "dashed",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                <Camera size={30} color={T.primary} strokeWidth={1.5} />
+                <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD }}>Add Photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {preview && (
+            <TouchableOpacity onPress={choosePhoto} style={{ marginTop: 8 }}>
+              <Text style={{ fontSize: 13, color: T.primary, fontFamily: FONT_BOLD }}>Change photo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Field label="Dog's Name *" value={form.name} onChangeText={(v) => set("name", v)} placeholder="e.g. Bella" maxLength={40} error={errors.name} />
+
+        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 6, fontFamily: FONT_MEDIUM }}>Breed *</Text>
+        <BreedInput value={form.breed} onChange={(v) => set("breed", v)} error={errors.breed} />
+
+        <Field
+          label="Age (years) *"
+          value={form.age}
+          onChangeText={(v) => set("age", v)}
+          placeholder="e.g. 2 or 0.5 for 6 months"
+          keyboardType="decimal-pad"
+          error={errors.age}
+        />
+
+        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Sex *</Text>
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
+          {(["female", "male"] as const).map((s) => (
+            <SegmentButton key={s} label={capitalize(s)} active={form.sex === s} onPress={() => set("sex", s)} />
+          ))}
+        </View>
+
+        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Size *</Text>
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
+          {(["small", "medium", "large"] as const).map((s) => (
+            <SegmentButton key={s} label={capitalize(s)} active={form.size === s} onPress={() => set("size", s)} />
+          ))}
+        </View>
+
+        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 6, fontFamily: FONT_MEDIUM }}>Color *</Text>
+        <ColorCombobox value={form.color} onChange={(v) => set("color", v)} />
+        {errors.color ? <Text style={{ fontSize: 12, color: T.error, marginTop: -8, marginBottom: 10, fontFamily: FONT }}>{errors.color}</Text> : null}
+
+        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Temperament * (up to 3)</Text>
+        <TemperamentPicker value={form.temperament} onChange={(v) => set("temperament", v)} />
+        {errors.temperament ? <Text style={{ fontSize: 12, color: T.error, marginTop: 6, fontFamily: FONT }}>{errors.temperament}</Text> : null}
+
+        <Field
+          label="About (optional)"
+          value={form.description}
+          onChangeText={(v) => set("description", v)}
+          placeholder="Health history, personality, breeding experience…"
+          multiline
+          maxLength={1000}
+          style={{ marginTop: 18 }}
+        />
+
+        <Btn title={existing ? "Save Changes" : "Add Dog Profile"} size="large" loading={saving} onPress={submit} style={{ marginTop: 6 }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function SegmentButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active }}
+      style={{
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: active ? T.primary : T.border,
+        backgroundColor: active ? T.primaryLight : T.white,
+        alignItems: "center",
+      }}
+    >
+      <Text style={{ fontSize: 14, color: active ? T.primaryDark : T.medium, fontFamily: FONT_BOLD }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+export function AddDog() {
+  return <DogForm />;
+}
+
+export function EditDog() {
+  const { params, myDogs } = useApp();
+  const dog = myDogs.find((d) => d.id === params.dogId);
+  if (!dog) return <Loading />;
+  return <DogForm existing={dog} />;
+}
+
+/* ── Owner profile (Figure 14) ──────────────────────────────────── */
+export function OwnerProfile() {
+  const { navigate, goBack, canGoBack, myDogs, signOut } = useApp();
+  const session = useSession();
+  const owner = session.owner;
+  const memberSince = formatDate(session.user.created_at, { day: undefined });
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            flex: 1,
-          }}
-        >
-          <User size={18} color={T.dark} strokeWidth={1.5} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            My Profile
-          </Text>
-        </View>
-      </View>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 80 }}
-      >
-        {/* Profile header */}
-        <View
-          style={{
-            alignItems: "center",
-            paddingTop: 24,
-            paddingBottom: 20,
-            paddingHorizontal: 20,
-            backgroundColor: T.white,
-          }}
-        >
-          <View style={{ position: "relative", marginBottom: 12 }}>
-            <View
-              style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: T.teal,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 24, fontWeight: "700", color: "#fff" }}>
-                J
-              </Text>
-            </View>
-            <View style={{ position: "absolute", bottom: -4, right: -4 }}>
-              <Award
-                size={20}
-                color="#f59e0b"
-                fill="#f59e0b"
-                strokeWidth={1.5}
-              />
-            </View>
+      <Header title="My Profile" icon={User} onBack={canGoBack ? goBack : undefined} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <View style={{ alignItems: "center", paddingVertical: 22, paddingHorizontal: 20, backgroundColor: T.white, gap: 4 }}>
+          <View>
+            <Avatar name={session.user.full_name} size={80} />
+            {owner?.verified_at && (
+              <View style={{ position: "absolute", right: -4, bottom: -4 }}>
+                <Award size={22} color={T.star} fill={T.star} strokeWidth={1.5} />
+              </View>
+            )}
           </View>
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Juan dela Cruz
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <MapPin size={12} color={T.medium} strokeWidth={1.5} />
-            <Text style={{ fontSize: 14, color: T.medium }}>Davao City</Text>
-            <Text style={{ fontSize: 14, color: T.medium }}> • </Text>
-            <Calendar size={12} color={T.medium} strokeWidth={1.5} />
-            <Text style={{ fontSize: 14, color: T.medium }}>
-              Member since Jan 2025
-            </Text>
+          <Text style={{ fontSize: 20, color: T.dark, fontFamily: FONT_BOLD, marginTop: 10 }}>{session.user.full_name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
+            <MapPin size={12} color={T.medium} />
+            <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT }}>{session.user.location}</Text>
+            <Text style={{ color: T.medium }}> • </Text>
+            <Calendar size={12} color={T.medium} />
+            <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT }}>Member since {memberSince}</Text>
           </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              marginTop: 4,
-            }}
-          >
-            {[1, 2, 3, 4].map((i) => (
-              <Star
-                key={i}
-                size={14}
-                color="#f59e0b"
-                fill="#f59e0b"
-                strokeWidth={1.5}
-              />
-            ))}
-            <Star size={14} color="#d1d5db" strokeWidth={1.5} />
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                marginLeft: 4,
-                color: T.dark,
-              }}
-            >
-              4.8 / 5.0
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <Stars rating={owner?.rating ?? 0} />
+            <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>
+              {owner && owner.review_count > 0 ? `${owner.rating.toFixed(1)} / 5.0` : "No reviews yet"}
             </Text>
           </View>
         </View>
 
-        {/* My dogs */}
-        <View
-          style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 20 }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <PawPrint size={18} color={T.dark} strokeWidth={1.5} />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "700",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              My Dogs
-            </Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
-          >
-            {MOCK_DOGS.slice(0, 2).map((dog) => (
+        <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+          <SectionTitle title="My Dogs" icon={PawPrint} />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 6 }}>
+            {myDogs.map((dog) => (
               <TouchableOpacity
                 key={dog.id}
-                onPress={() => navigate("dog-profile", dog)}
-                style={{
-                  alignItems: "center",
-                  gap: 6,
-                  padding: 12,
-                  borderRadius: 16,
-                  backgroundColor: T.white,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.08,
-                  shadowRadius: 8,
-                  elevation: 2,
-                  width: 100,
-                }}
+                onPress={() => navigate("dog-profile", { dogId: dog.id })}
+                style={{ alignItems: "center", gap: 6, padding: 12, borderRadius: 16, backgroundColor: T.white, width: 104, ...shadow }}
               >
-                <View style={{ position: "relative" }}>
-                  <Image
-                    source={{ uri: dog.images?.[0] }}
-                    style={{ width: 64, height: 64, borderRadius: 12 }}
-                    resizeMode="cover"
-                  />
-                  <View style={{ position: "absolute", bottom: -4, right: -4 }}>
-                    {dog.owner.verificationStatus === 'verified' ? (
-                      <CheckCircle
-                        size={16}
-                        color={T.teal}
-                        fill={T.white}
-                        strokeWidth={2}
-                      />
-                    ) : (
-                      <Clock
-                        size={16}
-                        color="#a06000"
-                        fill={T.white}
-                        strokeWidth={2}
-                      />
-                    )}
+                <View>
+                  <DogImage uri={dog.img} width={64} height={64} />
+                  <View style={{ position: "absolute", right: -6, bottom: -6, backgroundColor: T.white, borderRadius: 10 }}>
+                    {dog.verified ? <CheckCircle size={18} color={T.success} /> : <Clock size={18} color={T.warning} />}
                   </View>
                 </View>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: T.dark,
-                    textAlign: "center",
-                  }}
-                >
-                  {dog.name}
-                </Text>
-                <Text
-                  style={{ fontSize: 12, color: T.medium, textAlign: "center" }}
-                >
-                  {dog.breed}
-                </Text>
+                <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT_BOLD }} numberOfLines={1}>{dog.name}</Text>
+                <Text style={{ fontSize: 11, color: T.medium, fontFamily: FONT, textAlign: "center" }} numberOfLines={2}>{dog.breed}</Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity
               onPress={() => navigate("add-dog")}
               style={{
-                width: 80,
-                height: 120,
+                width: 90,
+                minHeight: 126,
                 borderRadius: 16,
-                backgroundColor: T.tealLight,
+                backgroundColor: T.primaryLight,
                 borderWidth: 2,
-                borderColor: T.teal + "50",
+                borderColor: T.primary + "60",
                 borderStyle: "dashed",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 4,
               }}
             >
-              <Plus size={24} color={T.teal} strokeWidth={1.5} />
-              <Text style={{ fontSize: 12, fontWeight: "600", color: T.teal }}>
-                Add Dog
-              </Text>
+              <Plus size={24} color={T.primary} strokeWidth={1.5} />
+              <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD }}>Add Dog</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
 
-        {/* Reputation summary */}
-        <View
-          style={{
-            marginHorizontal: 20,
-            marginBottom: 20,
-            padding: 16,
-            borderRadius: 16,
-            backgroundColor: T.white,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            elevation: 2,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              marginBottom: 4,
-            }}
-          >
-            <Star size={16} color={T.dark} strokeWidth={1.5} />
-            <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
-              Reputation & History
-            </Text>
+        <Card style={{ marginHorizontal: 20, marginTop: 16 }} onPress={() => navigate("reputation")}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <Star size={16} color={T.dark} strokeWidth={1.6} />
+            <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Reputation & History</Text>
           </View>
-          <Text style={{ fontSize: 12, color: T.medium }}>
-            12 successful matches • 8 reviews • Member 1.5 years
+          <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>
+            {owner?.completed_matches ?? 0} completed match{owner?.completed_matches === 1 ? "" : "es"} •{" "}
+            {owner?.review_count ?? 0} review{owner?.review_count === 1 ? "" : "s"}
+            {owner?.verified_at ? ` • Verified since ${formatDate(owner.verified_at, { day: undefined })}` : ""}
           </Text>
-          <TouchableOpacity
-            onPress={() => navigate("reputation")}
-            style={{ marginTop: 8 }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "600", color: T.teal }}>
-              View Full Reputation →
-            </Text>
-          </TouchableOpacity>
-        </View>
+          <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD, marginTop: 8 }}>View Full Reputation →</Text>
+        </Card>
 
-        {/* Settings */}
-        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <Settings size={18} color={T.dark} strokeWidth={1.5} />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "700",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Settings
-            </Text>
-          </View>
-          <View
-            style={{
-              borderRadius: 16,
-              overflow: "hidden",
-              backgroundColor: T.white,
-            }}
-          >
-            {settings.map((s, i) => (
-              <TouchableOpacity
-                key={s.t}
-                onPress={() => navigate(s.s)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  borderBottomWidth: i < settings.length - 1 ? 1 : 0,
-                  borderBottomColor: T.border,
-                }}
-              >
-                <s.Icon size={20} color={T.dark} strokeWidth={1.5} />
-                <Text
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    fontWeight: "500",
-                    color: T.dark,
-                    fontFamily: FONT,
-                  }}
-                >
-                  {s.t}
-                </Text>
-                <Text style={{ fontSize: 16, color: T.medium }}>›</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              onPress={handleLogout}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                paddingHorizontal: 16,
-                paddingVertical: 16,
-              }}
-            >
-              <LogOut size={20} color={T.coral} strokeWidth={1.5} />
-              <Text
-                style={{
-                  flex: 1,
-                  fontSize: 14,
-                  fontWeight: "500",
-                  color: T.coral,
-                  fontFamily: FONT,
-                }}
-              >
-                Log Out
-              </Text>
-            </TouchableOpacity>
+        <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+          <SectionTitle title="Settings" icon={Settings} />
+          <View style={{ borderRadius: 16, overflow: "hidden" }}>
+            <ListItem icon={MessageCircle} title="Requests & Messages" onPress={() => navigate("requests")} />
+            <ListItem icon={Bell} title="Notifications" onPress={() => navigate("notifications")} />
+            <ListItem icon={User} title="Edit Profile" onPress={() => navigate("edit-profile")} />
+            <ListItem icon={KeyRound} title="Change Password" onPress={() => navigate("change-password")} />
+            <ListItem icon={ShieldCheck} title="My Documents" onPress={() => navigate("verify-status")} />
+            <ListItem icon={HelpCircle} title="Help & About" onPress={() => navigate("settings")} />
+            <ListItem
+              icon={LogOut}
+              title="Log Out"
+              danger
+              last
+              onPress={() => confirmAction("Log out?", "You'll need to sign in again to use PawMatch.", "Log Out", signOut)}
+            />
           </View>
         </View>
       </ScrollView>
@@ -931,783 +754,235 @@ export function OwnerProfile() {
   );
 }
 
-/* ── Match Profile (Other Dog) ───────────────────────────────── */
+/* ── Another owner's dog ────────────────────────────────────────── */
 export function MatchProfileScreen() {
-  const { navigate, goBack, selectedDog } = useV3();
-  const dog = selectedDog || MOCK_DOGS[0];
+  const { navigate, goBack, params, activeDog } = useApp();
+  const session = useSession();
+  const dogId: string = params.dogId;
+  const dog = useAsync(() => api.getDog(dogId), [dogId]);
+  const existing = useAsync(
+    () => (activeDog ? api.findOpenRequest(dogId, activeDog.id) : Promise.resolve(null)),
+    [dogId, activeDog?.id],
+  );
+
+  const match = useMemo(() => {
+    if (!dog.data || !activeDog || dog.data.sex === activeDog.sex) return null;
+    const compatibility = computeCompatibility(activeDog, dog.data);
+    return { dog: dog.data, compatibility, reasons: explainCompatibility(compatibility, dog.data.breed) };
+  }, [dog.data, activeDog]);
+
+  if (dog.loading) return <ScreenShell title="Dog Profile" onBack={goBack}><Loading /></ScreenShell>;
+  if (dog.error || !dog.data) {
+    return (
+      <ScreenShell title="Dog Profile" onBack={goBack}>
+        <ErrorView message={dog.error ?? "This dog profile is no longer available."} onRetry={dog.error ? () => dog.reload() : undefined} />
+      </ScreenShell>
+    );
+  }
+
+  const d = dog.data;
+  const isMine = d.owner_id === session.user.id;
+  const gallery = [d.img, ...d.photos].filter(Boolean) as string[];
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "700",
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        >
-          {dog.name}'s Profile
-        </Text>
-      </View>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 80 }}
-      >
-        <View
-          style={{
-            alignItems: "center",
-            paddingTop: 24,
-            paddingBottom: 20,
-            backgroundColor: T.white,
-          }}
-        >
-          <Image
-            source={{ uri: dog.images?.[0] }}
-            style={{
-              width: 112,
-              height: 112,
-              borderRadius: 56,
-              borderWidth: 4,
-              borderColor: T.teal,
-            }}
-            resizeMode="cover"
-          />
-          <Text
-            style={{
-              fontSize: 24,
-              fontWeight: "700",
-              marginTop: 12,
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            {dog.name}
-          </Text>
-          <Text style={{ fontSize: 14, color: T.medium }}>
-            {dog.breed} • {dog.age} • {dog.sex}
-          </Text>
-          <View style={{ marginTop: 8 }}>
-            <VeriBadge tier={dog.verificationTier} />
-          </View>
+      <Header title={`${d.name}'s Profile`} icon={PawPrint} onBack={goBack} />
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <DogHeaderBlock dog={d} />
+        <View style={{ padding: 20, gap: 14 }}>
+          <Card style={{ gap: 10 }}>
+            <SectionTitle title="Trust indicators" icon={ShieldCheck} />
+            <TrustIndicators dog={d} />
+            <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{TIER_DESCRIPTIONS[d.tier]}</Text>
+            <TouchableOpacity onPress={() => navigate("audit-trail", { dogId: d.id })}>
+              <Text style={{ fontSize: 13, color: T.primary, fontFamily: FONT_BOLD }}>View Audit Trail →</Text>
+            </TouchableOpacity>
+          </Card>
+
+          {match && activeDog && (
+            <Card style={{ gap: 12 }}>
+              <SectionTitle
+                title={`Compatibility with ${activeDog.name}`}
+                icon={Star}
+                right={<Text style={{ fontSize: 18, color: T.primary, fontFamily: FONT_BOLD }}>{match.compatibility.total}%</Text>}
+              />
+              <CompatibilityBreakdownCard match={match} />
+            </Card>
+          )}
+
+          <BasicInfoCard dog={d} />
+
+          {d.owner && (
+            <Card onPress={() => navigate("reputation", { userId: d.owner_id })} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Avatar name={d.owner.display_name} size={48} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD }}>{d.owner.display_name}</Text>
+                <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>{d.owner.location}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Stars rating={d.owner.rating} size={12} />
+                  <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>
+                    {d.owner.review_count} review{d.owner.review_count === 1 ? "" : "s"} • {d.owner.completed_matches} matches
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={18} color={T.light} />
+            </Card>
+          )}
+
+          {gallery.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+              {gallery.map((url) => (
+                <DogImage key={url} uri={url} width={120} height={120} />
+              ))}
+            </ScrollView>
+          )}
+
+          {isMine ? (
+            <Tag label="This is your dog" tone="info" />
+          ) : existing.data ? (
+            <Btn
+              title="Open conversation"
+              icon={MessageSquare}
+              onPress={() => navigate("conversation", { requestId: existing.data!.id })}
+            />
+          ) : (
+            <Btn title="Send Match Request" icon={Send} onPress={() => navigate("send-request", { dogId: d.id })} />
+          )}
         </View>
-        <View style={{ paddingHorizontal: 20, paddingVertical: 20, gap: 12 }}>
-          <View
-            style={{
-              padding: 16,
-              borderRadius: 16,
-              backgroundColor: T.white,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              elevation: 2,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                marginBottom: 8,
-              }}
-            >
-              <FileText size={16} color={T.dark} strokeWidth={1.5} />
-              <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
-                Basic Info
-              </Text>
-            </View>
-            {[
-              ["Breed", dog.breed],
-              ["Age", dog.age],
-              ["Sex", dog.sex],
-              ["Size", dog.size],
-              ["Color", dog.color],
-            ].map(([k, v]) => (
-              <View
-                key={k}
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: T.bg,
-                }}
-              >
-                <Text style={{ fontSize: 14, color: T.medium }}>{k}</Text>
-                <Text
-                  style={{ fontSize: 14, fontWeight: "600", color: T.dark }}
-                >
-                  {v}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ScreenShell({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <Header title={title} onBack={onBack} />
+      {children}
+    </View>
+  );
+}
+
+/* ── Send breeding request ──────────────────────────────────────── */
+export function SendRequest() {
+  const { goBack, replace, params, myDogs, activeDog, setActiveDogId, showToast, navigate } = useApp();
+  const dogId: string = params.dogId;
+  const target = useAsync(() => api.getDog(dogId), [dogId]);
+  const eligible = myDogs.filter((d) => target.data && d.sex !== target.data.sex);
+  const mine = eligible.find((d) => d.id === activeDog?.id) ?? eligible[0] ?? null;
+  const existing = useAsync(() => (mine ? api.findOpenRequest(dogId, mine.id) : Promise.resolve(null)), [dogId, mine?.id]);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const compatibility = target.data && mine ? computeCompatibility(mine, target.data) : null;
+
+  const send = async () => {
+    if (!target.data || !mine) return;
+    setSending(true);
+    try {
+      const request = await api.createRequest({
+        dogId: target.data.id,
+        myDogId: mine.id,
+        message: message.trim() || `Hi! I'd like to discuss pairing ${mine.name} with ${target.data.name}.`,
+        score: compatibility?.total ?? null,
+      });
+      showToast("Request sent", `${target.data.owner?.display_name ?? "The owner"} will be notified.`, "success");
+      replace("conversation", { requestId: request.id });
+    } catch (e) {
+      showMessage("Couldn't send request", api.errorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Header title="Send Request" icon={Send} onBack={goBack} />
+      {target.loading ? (
+        <Loading />
+      ) : target.error || !target.data ? (
+        <ErrorView message={target.error ?? "This dog profile is no longer available."} />
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          <Card style={{ gap: 10 }}>
+            <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT_MEDIUM }}>Sending request to</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <DogImage uri={target.data.img} width={52} height={52} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, color: T.dark, fontFamily: FONT_BOLD }}>{target.data.name}</Text>
+                <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>
+                  {target.data.breed} • {target.data.owner?.display_name}
                 </Text>
               </View>
-            ))}
-          </View>
-          <TouchableOpacity
-            onPress={() => navigate("send-request", dog)}
-            style={{
-              width: "100%",
-              paddingVertical: 14,
-              borderRadius: 12,
-              backgroundColor: T.teal,
-              alignItems: "center",
-              flexDirection: "row",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            <Send size={16} color="#fff" strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#fff",
-                fontFamily: FONT,
-              }}
-            >
-              Send Match Request
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-/* ── Send Request ────────────────────────────────────────────── */
-export function SendRequest() {
-  const { navigate, goBack, selectedDog } = useV3();
-  const dog = selectedDog || MOCK_DOGS[0];
-
-  return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            flex: 1,
-          }}
-        >
-          <Send size={18} color={T.dark} strokeWidth={1.5} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Send Request
-          </Text>
-        </View>
-      </View>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingVertical: 20,
-          gap: 16,
-          paddingBottom: 120,
-        }}
-      >
-        <View
-          style={{
-            padding: 16,
-            borderRadius: 16,
-            backgroundColor: T.white,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 8,
-            elevation: 2,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "700",
-              marginBottom: 8,
-              color: T.dark,
-            }}
-          >
-            Sending request to:
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Image
-              source={{ uri: dog.images?.[0] }}
-              style={{ width: 48, height: 48, borderRadius: 12 }}
-              resizeMode="cover"
-            />
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: "700", color: T.dark }}>
-                {dog.name}
-              </Text>
-              <Text style={{ fontSize: 12, color: T.medium }}>
-                {dog.breed} • {dog.owner.name}
-              </Text>
+              <VeriBadge tier={target.data.tier} />
             </View>
-          </View>
-        </View>
-        <View
-          style={{ padding: 16, borderRadius: 16, backgroundColor: T.white }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              marginBottom: 8,
-            }}
-          >
-            <MessageSquare size={16} color={T.dark} strokeWidth={1.5} />
-            <Text style={{ fontSize: 14, fontWeight: "700", color: T.dark }}>
-              Message (Optional)
-            </Text>
-          </View>
-          <View
-            style={{
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: T.border,
-              padding: 12,
-              minHeight: 100,
-              backgroundColor: T.bg,
-            }}
-          >
-            <Text style={{ fontSize: 14, color: T.medium }}>
-              Write a message...
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={() => navigate("conversation", dog)}
-          style={{
-            width: "100%",
-            paddingVertical: 14,
-            borderRadius: 12,
-            backgroundColor: T.teal,
-            alignItems: "center",
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          <CheckCircle size={16} color="#fff" strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#fff",
-              fontFamily: FONT,
-            }}
-          >
-            Send Request
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  );
-}
+          </Card>
 
-/* ── Request Received ────────────────────────────────────────── */
-export function RequestReceived() {
-  const { navigate, goBack } = useV3();
+          {eligible.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={PawPrint}
+                title={`Add a ${target.data.sex === "male" ? "female" : "male"} dog first`}
+                message="Breeding requests are sent on behalf of one of your dogs of the opposite sex."
+                actionLabel="Add Dog Profile"
+                onAction={() => navigate("add-dog")}
+              />
+            </Card>
+          ) : (
+            <>
+              <Card style={{ gap: 12 }}>
+                <MyDogSelector dogs={eligible} activeId={mine?.id} onSelect={setActiveDogId} label="On behalf of" />
+                {compatibility && (
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT_MEDIUM }}>Compatibility score</Text>
+                    <ScoreBar score={compatibility.total} showLabel />
+                  </View>
+                )}
+              </Card>
 
-  return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            flex: 1,
-          }}
-        >
-          <Send size={18} color={T.dark} strokeWidth={1.5} />
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Match Request
-          </Text>
-        </View>
-      </View>
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-      >
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: T.tealLight,
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 16,
-          }}
-        >
-          <Send size={40} color={T.teal} strokeWidth={1.5} />
-        </View>
-        <Text
-          style={{
-            fontSize: 24,
-            fontWeight: "700",
-            marginBottom: 8,
-            textAlign: "center",
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        >
-          Request Sent!
-        </Text>
-        <Text
-          style={{
-            fontSize: 16,
-            textAlign: "center",
-            color: T.medium,
-            marginBottom: 24,
-          }}
-        >
-          You'll be notified when the owner responds to your request.
-        </Text>
-        <TouchableOpacity
-          onPress={() => navigate("home")}
-          style={{
-            paddingHorizontal: 32,
-            paddingVertical: 14,
-            borderRadius: 12,
-            backgroundColor: T.teal,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          <ArrowLeft size={16} color="#fff" strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: "#fff",
-              fontFamily: FONT,
-            }}
-          >
-            Back to Home
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-/* ── Add Dog ──────────────────────────────────────────────────── */
-export function AddDog() {
-  const { navigate, goBack } = useV3();
-  const [formData, setFormData] = useState({
-    name: "",
-    breed: "",
-    age: "",
-    sex: "male" as "male" | "female",
-    size: "medium" as "small" | "medium" | "large",
-    color: "",
-    temperament: [] as string[],
-  });
-
-  const temperamentOptions = [
-    "Friendly",
-    "Calm",
-    "Playful",
-    "Active",
-    "Protective",
-    "Independent",
-    "Loyal",
-    "Energetic",
-  ];
-
-  const toggleTemperament = (temp: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      temperament: prev.temperament.includes(temp)
-        ? prev.temperament.filter((t) => t !== temp)
-        : [...prev.temperament, temp],
-    }));
-  };
-
-  const handleSubmit = () => {
-    // Validate required fields
-    if (!formData.name.trim()) {
-      alert("Please enter the dog's name");
-      return;
-    }
-    if (!formData.breed.trim()) {
-      alert("Please enter the breed");
-      return;
-    }
-    if (!formData.age.trim()) {
-      alert("Please enter the age");
-      return;
-    }
-    if (!formData.color.trim()) {
-      alert("Please enter the color");
-      return;
-    }
-
-    // TODO: Add dog to backend and update context
-    // For now, just show success message and navigate back
-    console.log("Submitting dog profile:", formData);
-
-    // Navigate back to owner profile
-    navigate("owner-profile");
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
-      {/* Header */}
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <TouchableOpacity onPress={goBack}>
-          <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
-        </TouchableOpacity>
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: "700",
-            color: T.dark,
-            fontFamily: FONT,
-          }}
-        >
-          Add New Dog
-        </Text>
-      </View>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 20, paddingBottom: 100 }}
-      >
-        {/* Photo upload */}
-        <View style={{ alignItems: "center", marginBottom: 24 }}>
-          <TouchableOpacity
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 60,
-              backgroundColor: T.tealLight,
-              borderWidth: 3,
-              borderColor: T.teal,
-              borderStyle: "dashed",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            <Camera size={32} color={T.teal} strokeWidth={1.5} />
-            <Text style={{ fontSize: 12, fontWeight: "600", color: T.teal }}>
-              Add Photo
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Basic Info */}
-        <View style={{ gap: 16 }}>
-          {/* Name */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Dog's Name *
-            </Text>
-            <TextInput
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-              placeholder="Enter dog's name"
-              placeholderTextColor={T.medium}
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: T.border,
-                backgroundColor: T.white,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                fontSize: 14,
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            />
-          </View>
-
-          {/* Breed */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Breed *
-            </Text>
-            <TextInput
-              value={formData.breed}
-              onChangeText={(text) => setFormData({ ...formData, breed: text })}
-              placeholder="Enter breed"
-              placeholderTextColor={T.medium}
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: T.border,
-                backgroundColor: T.white,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                fontSize: 14,
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            />
-          </View>
-
-          {/* Age */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Age (years) *
-            </Text>
-            <TextInput
-              value={formData.age}
-              onChangeText={(text) => setFormData({ ...formData, age: text })}
-              placeholder="Enter age"
-              placeholderTextColor={T.medium}
-              keyboardType="numeric"
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: T.border,
-                backgroundColor: T.white,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                fontSize: 14,
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            />
-          </View>
-
-          {/* Sex */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Sex *
-            </Text>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {(["male", "female"] as const).map((sex) => (
-                <TouchableOpacity
-                  key={sex}
-                  onPress={() => setFormData({ ...formData, sex })}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    borderWidth: 2,
-                    borderColor: formData.sex === sex ? T.teal : T.border,
-                    backgroundColor: formData.sex === sex ? T.tealLight : T.white,
-                    alignItems: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: formData.sex === sex ? T.teal : T.medium,
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {sex}
+              {existing.data ? (
+                <Card style={{ gap: 10 }}>
+                  <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>You already have an active request</Text>
+                  <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT }}>
+                    Continue the conversation instead of sending a new request.
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Size */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Size *
-            </Text>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {(["small", "medium", "large"] as const).map((size) => (
-                <TouchableOpacity
-                  key={size}
-                  onPress={() => setFormData({ ...formData, size })}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    borderRadius: 12,
-                    borderWidth: 2,
-                    borderColor: formData.size === size ? T.teal : T.border,
-                    backgroundColor: formData.size === size ? T.tealLight : T.white,
-                    alignItems: "center",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: formData.size === size ? T.teal : T.medium,
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {size}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Color */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Color *
-            </Text>
-            <TextInput
-              value={formData.color}
-              onChangeText={(text) => setFormData({ ...formData, color: text })}
-              placeholder="Enter color"
-              placeholderTextColor={T.medium}
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: T.border,
-                backgroundColor: T.white,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                fontSize: 14,
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            />
-          </View>
-
-          {/* Temperament */}
-          <View>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: T.dark, marginBottom: 8 }}>
-              Temperament (Select up to 3)
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {temperamentOptions.map((temp) => (
-                <TouchableOpacity
-                  key={temp}
-                  onPress={() => toggleTemperament(temp)}
-                  disabled={!formData.temperament.includes(temp) && formData.temperament.length >= 3}
-                  style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                    borderRadius: 16,
-                    borderWidth: 2,
-                    borderColor: formData.temperament.includes(temp) ? T.teal : T.border,
-                    backgroundColor: formData.temperament.includes(temp) ? T.tealLight : T.white,
-                    opacity: !formData.temperament.includes(temp) && formData.temperament.length >= 3 ? 0.4 : 1,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "600",
-                      color: formData.temperament.includes(temp) ? T.teal : T.medium,
-                    }}
-                  >
-                    {temp}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Submit button */}
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          paddingHorizontal: 20,
-          paddingVertical: 16,
-          backgroundColor: T.white,
-          borderTopWidth: 1,
-          borderTopColor: T.border,
-        }}
-      >
-        <TouchableOpacity
-          onPress={handleSubmit}
-          style={{
-            paddingVertical: 16,
-            borderRadius: 12,
-            backgroundColor: T.teal,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontSize: 16, fontWeight: "700", color: "#fff", fontFamily: FONT }}>
-            Add Dog Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+                  <Btn title="Open conversation" icon={MessageSquare} onPress={() => replace("conversation", { requestId: existing.data!.id })} />
+                </Card>
+              ) : (
+                <>
+                  <Card style={{ gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <MessageSquare size={16} color={T.dark} strokeWidth={1.6} />
+                      <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Message (optional)</Text>
+                    </View>
+                    <TextInput
+                      value={message}
+                      onChangeText={setMessage}
+                      placeholder={`Introduce ${mine?.name ?? "your dog"}, share health details or suggest a meet-up…`}
+                      placeholderTextColor={T.light}
+                      multiline
+                      maxLength={2000}
+                      style={{
+                        minHeight: 110,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: T.border,
+                        backgroundColor: T.bg,
+                        padding: 12,
+                        fontSize: 14,
+                        color: T.dark,
+                        fontFamily: FONT,
+                        textAlignVertical: "top",
+                      }}
+                    />
+                  </Card>
+                  <Btn title="Send Request" icon={CheckCircle} size="large" loading={sending} onPress={send} />
+                </>
+              )}
+            </>
+          )}
+        </ScrollView>
+      )}
+    </KeyboardAvoidingView>
   );
 }

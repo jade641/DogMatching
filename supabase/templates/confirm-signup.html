@@ -1,0 +1,9 @@
+<!-- Supabase → Authentication → Emails → Templates → "Confirm signup".
+     Subject: Your PawMatch confirmation code: {{ .Token }} -->
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #2c2c2a;">
+  <h2 style="color: #ff7043; margin: 0 0 12px;">Welcome to PawMatch!</h2>
+  <p style="margin: 0 0 16px;">Enter this code in the PawMatch app to confirm your email address:</p>
+  <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 0 0 16px; color: #d84315;">{{ .Token }}</p>
+  <p style="margin: 0 0 8px; color: #76746d;">The code expires in 1 hour.</p>
+  <p style="margin: 0; color: #76746d;">If you didn't create a PawMatch account, you can ignore this email.</p>
+</div>

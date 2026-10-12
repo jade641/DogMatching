@@ -1,0 +1,4 @@
+project_id = "pawmatch"
+
+[functions.compatibility]
+verify_jwt = true

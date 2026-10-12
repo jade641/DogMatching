@@ -1,131 +1,87 @@
-import { DogIcon, Heart, Home, Shield, Star } from "lucide-react-native";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { FONT, Screen, T, useV3 } from "../contexts/AppContext";
+import {
+  Bell,
+  ClipboardList,
+  DogIcon,
+  FileCheck,
+  Heart,
+  Home,
+  LayoutDashboard,
+  Shield,
+  Star,
+  Stethoscope,
+  X,
+} from "lucide-react-native";
+import { type ComponentType, type ReactNode, useEffect, useRef } from "react";
+import { Animated, BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FONT, FONT_BOLD, FONT_MEDIUM, T } from "../constants/theme";
+import { useApp } from "../contexts/AppContext";
+import type { Screen } from "../types";
 
-const NAV_TABS: { icon: any; label: string; screens: Screen[] }[] = [
-  { icon: Home, label: "Home", screens: ["home"] },
+type Tab = { icon: ComponentType<any>; label: string; screens: Screen[] };
+
+const OWNER_TABS: Tab[] = [
+  { icon: Home, label: "Home", screens: ["home", "notifications"] },
   {
     icon: Heart,
     label: "Match",
-    screens: [
-      "match",
-      "filter",
-      "match-profile",
-      "send-request",
-      "request-received",
-    ],
+    screens: ["match", "filter", "match-profile", "send-request", "requests"],
   },
-  { icon: DogIcon, label: "Dog", screens: ["dog-profile"] },
-  {
-    icon: Shield,
-    label: "Verify",
-    screens: [
-      "verify-upload",
-      "verify-choose",
-      "verify-status",
-      "empty-verify",
-    ],
-  },
+  { icon: DogIcon, label: "Dog", screens: ["dog-profile", "add-dog", "edit-dog"] },
+  { icon: Shield, label: "Verify", screens: ["verify-upload", "verify-choose", "verify-status", "audit-trail"] },
   {
     icon: Star,
     label: "Records",
-    screens: [
-      "reputation",
-      "notifications",
-      "events",
-      "empty-notif",
-      "empty-matches",
-    ],
+    screens: ["reputation", "owner-profile", "settings", "edit-profile", "change-password"],
   },
 ];
 
-// Screens that should NOT show the bottom navigation
-const SCREENS_WITHOUT_NAV: Screen[] = [
+const VET_TABS: Tab[] = [
+  { icon: LayoutDashboard, label: "Dashboard", screens: ["vet-dashboard", "notifications"] },
+  { icon: ClipboardList, label: "Requests", screens: ["vet-requests", "vet-request-detail"] },
+  { icon: FileCheck, label: "Records", screens: ["vet-records"] },
+  { icon: Stethoscope, label: "Profile", screens: ["vet-profile", "vet-settings", "edit-profile", "change-password"] },
+];
+
+/** Full-screen pages without the tab bar. */
+const NO_NAV: Screen[] = [
+  "boot",
+  "setup-required",
   "landing",
-  "splash",
-  "onboarding",
-  "register",
   "login",
+  "register",
   "forgot-password",
-  "forgot-password-sent",
   "reset-password",
-  "vet-dashboard",
-  "vet-profile",
-  "vet-settings",
-  "vet-requests",
-  "vet-examination",
-  "vet-records",
-  "vet-dog-profile",
-  "vet-request-detail",
-  "request-vet-checkup",
+  "verify-email",
+  "conversation",
 ];
 
-const SCREENS_WITH_NAV: Screen[] = [
-  "home",
-  "match",
-  "filter",
-  "match-profile",
-  "send-request",
-  "request-received",
-  "dog-profile",
-  "add-dog",
-  "owner-profile",
-  "verify-upload",
-  "verify-choose",
-  "verify-status",
-  "reputation",
-  "notifications",
-  "events",
-  "settings",
-  "empty-matches",
-  "empty-notif",
-  "empty-verify",
-];
-
-export function BottomNav() {
-  const { screen, navigate } = useV3();
-
-  const activeTab = NAV_TABS.findIndex((t) => t.screens.includes(screen));
+function BottomNav({ tabs }: { tabs: Tab[] }) {
+  const { screen, resetTo, unreadCount } = useApp();
+  const insets = useSafeAreaInsets();
+  const activeIndex = tabs.findIndex((t) => t.screens.includes(screen));
 
   return (
-    <View
-      style={[
-        styles.bottomNav,
-        { backgroundColor: T.white, borderTopColor: T.border },
-      ]}
-    >
-      {NAV_TABS.map((tab, i) => {
-        const isActive = i === activeTab;
-        const dest = tab.screens[0];
-        const IconComponent = tab.icon;
-
+    <View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      {tabs.map((tab, i) => {
+        const active = i === activeIndex;
+        const Icon = tab.icon;
+        const showBadge = i === 0 && unreadCount > 0 && !active;
         return (
           <TouchableOpacity
             key={tab.label}
-            onPress={() => navigate(dest)}
-            style={styles.navTab}
+            onPress={() => resetTo(tab.screens[0])}
+            style={styles.tab}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: active }}
           >
-            <IconComponent
-              size={24}
-              color={isActive ? T.primary : T.medium}
-              strokeWidth={1.5}
-            />
-            <Text
-              style={[
-                styles.navLabel,
-                {
-                  color: isActive ? T.primary : T.medium,
-                  fontFamily: FONT,
-                },
-              ]}
-            >
-              {tab.label}
-            </Text>
-            {isActive && (
-              <View
-                style={[styles.activeDot, { backgroundColor: T.primary }]}
-              />
-            )}
+            <View>
+              <Icon size={23} color={active ? T.primary : T.medium} strokeWidth={1.6} />
+              {showBadge && <View style={styles.badgeDot} />}
+            </View>
+            <Text style={[styles.tabLabel, { color: active ? T.primary : T.medium }]}>{tab.label}</Text>
+            {active && <View style={styles.activeDot} />}
           </TouchableOpacity>
         );
       })}
@@ -133,50 +89,130 @@ export function BottomNav() {
   );
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
-  const { screen } = useV3();
+function ToastBanner() {
+  const { toast, dismissToast, openNotification } = useApp();
+  const insets = useSafeAreaInsets();
+  const anim = useRef(new Animated.Value(0)).current;
 
-  // Only show navigation if screen is in the WITH_NAV list
-  const showNav = SCREENS_WITH_NAV.includes(screen);
+  useEffect(() => {
+    if (!toast) return;
+    anim.setValue(0);
+    Animated.timing(anim, { toValue: 1, duration: 220, useNativeDriver: Platform.OS !== "web" }).start();
+    const timer = setTimeout(dismissToast, 4500);
+    return () => clearTimeout(timer);
+  }, [toast, anim, dismissToast]);
+
+  if (!toast) return null;
+  const accent = toast.tone === "error" ? T.error : toast.tone === "success" ? T.success : T.primary;
+
+  return (
+    <Animated.View
+      style={[
+        styles.toast,
+        {
+          top: Math.max(insets.top, 12) + 8,
+          borderLeftColor: accent,
+          opacity: anim,
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, flex: 1 }}
+        activeOpacity={0.8}
+        onPress={() => {
+          if (toast.notification) openNotification(toast.notification);
+          dismissToast();
+        }}
+      >
+        <Bell size={18} color={accent} style={{ marginTop: 2 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: FONT_BOLD, color: T.dark, fontSize: 14 }} numberOfLines={2}>
+            {toast.title}
+          </Text>
+          {toast.message ? (
+            <Text style={{ fontFamily: FONT, color: T.medium, fontSize: 12, marginTop: 2 }} numberOfLines={3}>
+              {toast.message}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={dismissToast} hitSlop={10} accessibilityLabel="Dismiss notification">
+        <X size={16} color={T.medium} />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+export function Shell({ children }: { children: ReactNode }) {
+  const { screen, session, canGoBack, goBack } = useApp();
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (canGoBack) {
+        goBack();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [canGoBack, goBack]);
+
+  const isVet = !!session?.verifier && !session?.owner;
+  const showNav = !!session && !NO_NAV.includes(screen);
 
   return (
     <View style={styles.shell}>
       <View style={styles.content}>{children}</View>
-      {showNav && <BottomNav />}
+      {showNav && <BottomNav tabs={isVet ? VET_TABS : OWNER_TABS} />}
+      <ToastBanner />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  shell: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
-  bottomNav: {
+  shell: { flex: 1, backgroundColor: T.bg },
+  content: { flex: 1 },
+  nav: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    height: 80,
-    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingHorizontal: 4,
     borderTopWidth: 1,
+    borderTopColor: T.border,
+    backgroundColor: T.white,
   },
-  navTab: {
-    flex: 1,
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  tab: { flex: 1, alignItems: "center", gap: 3, paddingVertical: 4 },
+  tabLabel: { fontSize: 11, fontFamily: FONT_MEDIUM },
+  activeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: T.primary },
+  badgeDot: {
+    position: "absolute",
+    top: -2,
+    right: -4,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: T.error,
+    borderWidth: 1.5,
+    borderColor: T.white,
   },
-  navLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  toast: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    zIndex: 1000,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: T.white,
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
 });

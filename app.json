@@ -4,32 +4,32 @@
     "slug": "PawMatch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "pawmatch",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pawmatch.mobile"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundImage": "./assets/images/icon.png",
-        "monochromeImage": "./assets/images/icon.png"
+        "backgroundColor": "#F47A2C",
+        "foregroundImage": "./assets/images/app-icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.PawMatch"
+      "package": "com.pawmatch.mobile",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/app-icon.png"
     },
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#E6F4FE"
+      "backgroundColor": "#FF7043"
     },
     "plugins": [
       "expo-router",
@@ -39,13 +39,17 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#E6F4FE",
-          "dark": {
-            "image": "./assets/images/splash-icon.png",
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#FF7043"
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PawMatch uses your photos so you can add pictures of your dog and upload vaccination, health and pedigree documents.",
+          "cameraPermission": "PawMatch uses the camera so you can photograph your dog's vaccination, health and pedigree documents."
+        }
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

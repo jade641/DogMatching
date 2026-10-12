@@ -1,475 +1,447 @@
+import { CheckCircle, Clock3, Inbox, MapPin, MessageCircle, PawPrint, Send, ShieldCheck, Star, XCircle } from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  Clock3,
-  HeartHandshake,
-  MapPin,
-  MessageCircle,
-  PawPrint,
-  Send,
-  ShieldCheck,
-  Sparkles
-} from "lucide-react-native";
-import { useMemo, useState } from "react";
-import {
-  Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { FONT, MOCK_DOGS, T, useV3 } from "../contexts/AppContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FONT, FONT_BOLD, FONT_MEDIUM, formatTime, REQUEST_STATUS, shadow, T, timeAgo } from "../constants/theme";
+import { useApp, useSession } from "../contexts/AppContext";
+import { useAsync } from "../hooks/useAsync";
+import * as api from "../services/api";
+import type { MatchRequest, Message } from "../types";
+import { Btn, Card, confirmAction, DogImage, EmptyState, ErrorView, Header, Loading, showMessage, Tag } from "./ui";
 
-type ChatMessage = {
-  id: string;
-  from: "me" | "owner";
-  text: string;
-  time: string;
-};
+function otherSide(request: MatchRequest, me: string) {
+  const iAmRequester = request.requester_user_id === me;
+  return {
+    iAmRequester,
+    otherDog: iAmRequester ? request.dog : request.requester_dog,
+    myDog: iAmRequester ? request.requester_dog : request.dog,
+    otherName: iAmRequester ? (request.dog?.owner?.display_name ?? "Dog owner") : request.requester_name,
+  };
+}
 
-function ChatBubble({ message }: { message: ChatMessage }) {
-  const isMe = message.from === "me";
+/* ── Requests inbox ─────────────────────────────────────────────── */
+export function RequestsScreen() {
+  const { navigate, goBack, canGoBack, lastNotification } = useApp();
+  const session = useSession();
+  const [tab, setTab] = useState<"received" | "sent">("received");
+  const requests = useAsync(() => api.listMyRequests(), [lastNotification?.id]);
 
+  const list = (requests.data ?? []).filter((r) =>
+    tab === "received" ? r.recipient_user_id === session.user.id : r.requester_user_id === session.user.id,
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <Header title="Requests & Messages" icon={MessageCircle} onBack={canGoBack ? goBack : undefined} />
+      <View style={{ flexDirection: "row", margin: 20, marginBottom: 8, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: T.border }}>
+        {(["received", "sent"] as const).map((t) => (
+          <TouchableOpacity
+            key={t}
+            onPress={() => setTab(t)}
+            style={{ flex: 1, paddingVertical: 10, alignItems: "center", backgroundColor: tab === t ? T.primary : T.white }}
+          >
+            <Text style={{ fontFamily: FONT_BOLD, fontSize: 13, color: tab === t ? "#fff" : T.medium }}>
+              {t === "received" ? "Received" : "Sent"}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 12, paddingBottom: 32 }}>
+        {requests.loading ? (
+          <Loading />
+        ) : requests.error ? (
+          <ErrorView message={requests.error} onRetry={() => requests.reload()} />
+        ) : list.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title={tab === "received" ? "No requests yet" : "You haven't sent any requests"}
+            message={
+              tab === "received"
+                ? "When another owner wants to pair with your dog, the request will appear here."
+                : "Use the Breeding Matcher to find a compatible partner and send a request."
+            }
+            actionLabel={tab === "sent" ? "Open Matcher" : undefined}
+            onAction={tab === "sent" ? () => navigate("filter") : undefined}
+          />
+        ) : (
+          list.map((r) => {
+            const { otherDog, myDog, otherName } = otherSide(r, session.user.id);
+            const status = REQUEST_STATUS[r.status];
+            return (
+              <Card key={r.id} onPress={() => navigate("conversation", { requestId: r.id })} style={{ flexDirection: "row", gap: 12 }}>
+                <DogImage uri={otherDog?.img} width={56} height={56} />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD, flexShrink: 1 }} numberOfLines={1}>
+                      {otherDog?.name ?? "Deleted dog"} × {myDog?.name ?? "—"}
+                    </Text>
+                    <Tag label={status.label} tone={status.tone} />
+                  </View>
+                  <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }} numberOfLines={1}>
+                    {otherName} • {otherDog?.breed ?? ""}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: T.light, fontFamily: FONT }}>
+                    {r.compatibility_score != null ? `${r.compatibility_score}% compatible • ` : ""}
+                    {timeAgo(r.updated_at)}
+                  </Text>
+                </View>
+              </Card>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ── Chat (Figure 13) ───────────────────────────────────────────── */
+function Bubble({ message, mine }: { message: Message; mine: boolean }) {
   return (
     <View
       style={{
-        alignSelf: isMe ? "flex-end" : "flex-start",
+        alignSelf: mine ? "flex-end" : "flex-start",
         maxWidth: "82%",
         paddingHorizontal: 14,
-        paddingVertical: 11,
+        paddingVertical: 10,
         borderRadius: 18,
-        backgroundColor: isMe ? T.primary : T.white,
-        marginBottom: 10,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: isMe ? 0.08 : 0.06,
-        shadowRadius: 8,
-        elevation: 2,
+        borderBottomRightRadius: mine ? 4 : 18,
+        borderBottomLeftRadius: mine ? 18 : 4,
+        backgroundColor: mine ? T.primary : T.white,
+        marginBottom: 8,
+        ...shadow,
+        elevation: 1,
       }}
     >
-      <Text
-        style={{
-          fontSize: 14,
-          lineHeight: 20,
-          color: isMe ? "#fff" : T.dark,
-          fontFamily: FONT,
-          fontWeight: "500",
-        }}
-      >
-        {message.text}
-      </Text>
-      <Text
-        style={{
-          marginTop: 6,
-          fontSize: 11,
-          color: isMe ? "rgba(255,255,255,0.75)" : T.medium,
-          textAlign: "right",
-        }}
-      >
-        {message.time}
+      <Text style={{ fontSize: 14, lineHeight: 20, color: mine ? "#fff" : T.dark, fontFamily: FONT }}>{message.body}</Text>
+      <Text style={{ marginTop: 4, fontSize: 10, color: mine ? "rgba(255,255,255,0.75)" : T.medium, textAlign: "right", fontFamily: FONT }}>
+        {formatTime(message.created_at)}
       </Text>
     </View>
   );
 }
 
-export function ConversationScreen() {
-  const { goBack, selectedDog, navigate } = useV3();
-  const dog = selectedDog || MOCK_DOGS[0];
-  const [draft, setDraft] = useState("");
+function ReviewForm({ request, otherName, onDone }: { request: MatchRequest; otherName: string; onDone: () => void }) {
+  const { showToast } = useApp();
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const owner = useMemo(() => {
-    const [city] = dog.owner.location.split(",");
-    return {
-      name: dog.owner.name,
-      location: city,
-      initials: dog.owner.name.charAt(0),
-      verified: dog.owner.verificationStatus === 'verified',
-    };
-  }, [dog]);
+  if (!open) {
+    return <Btn title={`Rate ${otherName}`} icon={Star} variant="secondary" size="small" onPress={() => setOpen(true)} />;
+  }
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "m1",
-      from: "owner",
-      text: `Hi! I'm ${owner.name}. I saw your interest in ${dog.name}. We'd be happy to discuss the pairing details.`,
-      time: "10:12 AM",
-    },
-    {
-      id: "m2",
-      from: "me",
-      text: `Hello! ${dog.name} looks like a strong match. I’d like to know more about temperament, schedule, and health documentation.`,
-      time: "10:14 AM",
-    },
-    {
-      id: "m3",
-      from: "owner",
-      text: "Sure. I can share the latest vet record and we can coordinate a meet-up first so the owners can agree on the plan.",
-      time: "10:16 AM",
-    },
-  ]);
-
-  const sendMessage = () => {
-    const trimmed = draft.trim();
-    if (!trimmed) return;
-
-    setMessages((current) => [
-      ...current,
-      {
-        id: `m-${Date.now()}`,
-        from: "me",
-        text: trimmed,
-        time: new Date().toLocaleTimeString([], {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-      },
-    ]);
-    setDraft("");
+  const submit = async () => {
+    if (rating === 0) {
+      showMessage("Choose a rating", "Tap the stars to rate your experience.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.createReview(request.id, rating, comment);
+      showToast("Review posted", `Thanks for rating ${otherName}.`, "success");
+      onDone();
+    } catch (e) {
+      showMessage("Couldn't post review", api.errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 14,
-          backgroundColor: T.white,
-          borderBottomWidth: 1,
-          borderBottomColor: T.border,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <TouchableOpacity
-            onPress={goBack}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 19,
-              backgroundColor: T.bg,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ArrowLeft size={20} color={T.dark} strokeWidth={1.5} />
+    <Card style={{ gap: 10 }}>
+      <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Rate your experience with {otherName}</Text>
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <TouchableOpacity key={i} onPress={() => setRating(i)} accessibilityRole="button" accessibilityLabel={`${i} star${i > 1 ? "s" : ""}`} hitSlop={4}>
+            <Star size={30} color={i <= rating ? T.star : T.light} fill={i <= rating ? T.star : "transparent"} strokeWidth={1.5} />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Chat
-            </Text>
-            <Text style={{ fontSize: 12, color: T.medium, marginTop: 2 }}>
-              Discuss the pairing, schedule, and next steps.
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => navigate("match-profile", dog)}
-            style={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 999,
-              backgroundColor: T.primaryLight,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <PawPrint size={14} color={T.primaryDark} strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: T.primaryDark,
-                fontFamily: FONT,
-              }}
-            >
-              Profile
-            </Text>
-          </TouchableOpacity>
-        </View>
+        ))}
       </View>
+      <TextInput
+        value={comment}
+        onChangeText={setComment}
+        placeholder="How was communication, honesty of records, the dog's health…"
+        placeholderTextColor={T.light}
+        multiline
+        maxLength={1000}
+        style={{
+          minHeight: 80,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: T.border,
+          backgroundColor: T.bg,
+          padding: 12,
+          fontSize: 14,
+          color: T.dark,
+          fontFamily: FONT,
+          textAlignVertical: "top",
+        }}
+      />
+      <Btn title="Post Review" loading={saving} onPress={submit} />
+    </Card>
+  );
+}
+
+export function ConversationScreen() {
+  const { navigate, goBack, params, lastNotification } = useApp();
+  const session = useSession();
+  const insets = useSafeAreaInsets();
+  const requestId = Number(params.requestId);
+  const request = useAsync(() => api.getRequest(requestId), [requestId]);
+  const messages = useAsync(() => api.listMessages(requestId), [requestId]);
+  const myReviews = useAsync(() => api.listMyWrittenReviews(session.user.id), [session.user.id, requestId]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [acting, setActing] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const unsubMessages = api.subscribeToMessages(requestId, (m) =>
+      messages.setData((list) => (list?.some((x) => x.id === m.id) ? list : [...(list ?? []), m])),
+    );
+    const unsubRequest = api.subscribeToRequest(requestId, () => request.reload(true));
+    return () => {
+      unsubMessages();
+      unsubRequest();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestId]);
+
+  // Realtime can miss events while the app is backgrounded; notifications are a second signal.
+  useEffect(() => {
+    if (lastNotification?.data?.match_request_id && Number(lastNotification.data.match_request_id) === requestId) {
+      request.reload(true);
+      messages.reload(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastNotification?.id]);
+
+  if (request.loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
+        <Header title="Chat" onBack={goBack} />
+        <Loading />
+      </View>
+    );
+  }
+  if (request.error || !request.data) {
+    return (
+      <View style={{ flex: 1, backgroundColor: T.bg }}>
+        <Header title="Chat" onBack={goBack} />
+        <ErrorView message={request.error ?? "This conversation is no longer available."} onRetry={() => request.reload()} />
+      </View>
+    );
+  }
+
+  const r = request.data;
+  const { iAmRequester, otherDog, myDog, otherName } = otherSide(r, session.user.id);
+  const status = REQUEST_STATUS[r.status];
+  const canChat = r.status === "pending" || r.status === "accepted" || r.status === "completed";
+  const canReview = (r.status === "accepted" || r.status === "completed") && !(myReviews.data ?? []).some((x) => x.match_request_id === r.id);
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body) return;
+    setSending(true);
+    try {
+      const m = await api.sendMessage(r.id, body);
+      messages.setData((list) => (list?.some((x) => x.id === m.id) ? list : [...(list ?? []), m]));
+      setDraft("");
+    } catch (e) {
+      showMessage("Message not sent", api.errorMessage(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const act = async (action: "accept" | "decline" | "cancel" | "complete") => {
+    setActing(true);
+    try {
+      await api.respondToRequest(r.id, action);
+      await request.reload(true);
+    } catch (e) {
+      showMessage("Couldn't update request", api.errorMessage(e));
+    } finally {
+      setActing(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <Header
+        title="Chat"
+        subtitle="Discuss the pairing, schedule, and next steps."
+        onBack={goBack}
+        right={
+          otherDog ? (
+            <TouchableOpacity
+              onPress={() => navigate("match-profile", { dogId: otherDog.id })}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: T.primaryLight }}
+            >
+              <PawPrint size={14} color={T.primaryDark} strokeWidth={2} />
+              <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT_BOLD }}>Profile</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 18,
-          paddingBottom: 140,
-        }}
+        ref={scrollRef}
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        keyboardShouldPersistTaps="handled"
       >
-        <View
-          style={{
-            borderRadius: 28,
-            overflow: "hidden",
-            backgroundColor: T.white,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.08,
-            shadowRadius: 14,
-            elevation: 3,
-          }}
-        >
-          <View
-            style={{
-              padding: 16,
-              backgroundColor: T.primary,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <Image
-              source={{ uri: dog.images?.[0] }}
-              style={{
-                width: 58,
-                height: 58,
-                borderRadius: 18,
-                borderWidth: 2,
-                borderColor: "rgba(255,255,255,0.55)",
-              }}
-              resizeMode="cover"
-            />
+        <View style={{ borderRadius: 22, overflow: "hidden", backgroundColor: T.white, marginBottom: 14, ...shadow }}>
+          <View style={{ padding: 14, backgroundColor: T.primary, flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <DogImage uri={otherDog?.img} width={56} height={56} radius={16} style={{ borderWidth: 2, borderColor: "rgba(255,255,255,0.6)" }} />
             <View style={{ flex: 1 }}>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "800",
-                    color: "#fff",
-                    fontFamily: FONT,
-                  }}
-                >
-                  {dog.name}
-                </Text>
-                {owner.verified && (
-                  <View
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 999,
-                      backgroundColor: "rgba(255,255,255,0.18)",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <ShieldCheck size={12} color="#fff" strokeWidth={2} />
-                    <Text
-                      style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}
-                    >
-                      Verified owner
-                    </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <Text style={{ fontSize: 18, color: "#fff", fontFamily: FONT_BOLD }}>{otherDog?.name ?? "Deleted dog"}</Text>
+                {otherDog?.verified && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.2)" }}>
+                    <ShieldCheck size={12} color="#fff" />
+                    <Text style={{ fontSize: 11, color: "#fff", fontFamily: FONT_BOLD }}>Tier {otherDog.tier} verified</Text>
                   </View>
                 )}
               </View>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.9)",
-                  marginTop: 3,
-                }}
-              >
-                {dog.breed} • {owner.name}
+              <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", marginTop: 2, fontFamily: FONT }}>
+                {otherDog?.breed} • {otherName}
               </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  marginTop: 4,
-                }}
-              >
-                <MapPin
-                  size={12}
-                  color="rgba(255,255,255,0.9)"
-                  strokeWidth={2}
-                />
-                <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.9)" }}>
-                  {owner.location}
-                </Text>
-              </View>
+              {otherDog?.owner?.location ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <MapPin size={11} color="rgba(255,255,255,0.9)" />
+                  <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", fontFamily: FONT }}>{otherDog.owner.location}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
+          <View style={{ padding: 14, gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT_MEDIUM }}>
+                {myDog ? `With your ${myDog.name}` : "Breeding request"}
+                {r.compatibility_score != null ? ` • ${r.compatibility_score}% compatible` : ""}
+              </Text>
+              <Tag label={status.label} tone={status.tone} />
+            </View>
 
-          <View style={{ padding: 16, gap: 10 }}>
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <Sparkles size={16} color={T.primaryDark} strokeWidth={2} />
-              <Text
+            {r.status === "pending" && !iAmRequester && (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Btn title="Accept" icon={CheckCircle} size="small" loading={acting} onPress={() => act("accept")} style={{ flex: 1 }} />
+                <Btn
+                  title="Decline"
+                  icon={XCircle}
+                  size="small"
+                  variant="danger"
+                  disabled={acting}
+                  onPress={() => confirmAction("Decline request?", `${otherName} will be notified.`, "Decline", () => act("decline"), true)}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            )}
+            {r.status === "pending" && iAmRequester && (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <Text style={{ flex: 1, fontSize: 12, color: T.medium, fontFamily: FONT }}>Waiting for {otherName} to respond.</Text>
+                <Btn
+                  title="Cancel"
+                  size="small"
+                  variant="danger"
+                  disabled={acting}
+                  onPress={() => confirmAction("Cancel request?", "The other owner will be notified.", "Cancel request", () => act("cancel"), true)}
+                />
+              </View>
+            )}
+            {r.status === "accepted" && (
+              <Btn
+                title="Mark breeding as completed"
+                size="small"
+                variant="outline"
+                loading={acting}
+                onPress={() => confirmAction("Mark as completed?", "Use this once the pairing has taken place. It counts toward both owners' history.", "Mark completed", () => act("complete"))}
+              />
+            )}
+          </View>
+        </View>
+
+        {canReview && <ReviewForm request={r} otherName={otherName} onDone={() => myReviews.reload(true)} />}
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12 }}>
+          <MessageCircle size={16} color={T.dark} strokeWidth={1.7} />
+          <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Messages</Text>
+        </View>
+        {messages.loading ? (
+          <Loading />
+        ) : messages.error ? (
+          <ErrorView message={messages.error} onRetry={() => messages.reload()} />
+        ) : (messages.data ?? []).length === 0 ? (
+          <Text style={{ color: T.medium, fontFamily: FONT, fontSize: 13 }}>No messages yet. Say hello!</Text>
+        ) : (
+          (messages.data ?? []).map((m) => <Bubble key={m.id} message={m} mine={m.sender_id === session.user.id} />)
+        )}
+      </ScrollView>
+
+      <View style={{ padding: 12, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: T.white, borderTopWidth: 1, borderTopColor: T.border, gap: 6 }}>
+        {canChat ? (
+          <>
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder={`Message ${otherName}…`}
+                placeholderTextColor={T.light}
+                multiline
+                maxLength={2000}
                 style={{
-                  fontSize: 13,
-                  fontWeight: "800",
+                  flex: 1,
+                  maxHeight: 120,
+                  minHeight: 44,
+                  borderRadius: 22,
+                  borderWidth: 1,
+                  borderColor: T.border,
+                  backgroundColor: T.bg,
+                  paddingHorizontal: 16,
+                  paddingTop: 12,
+                  paddingBottom: 10,
+                  fontSize: 14,
                   color: T.dark,
                   fontFamily: FONT,
                 }}
-              >
-                Conversation started after selecting a match
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-              {dog.temperament.map((item) => (
-                <View
-                  key={item}
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 5,
-                    borderRadius: 999,
-                    backgroundColor: T.bg,
-                  }}
-                >
-                  <Text style={{ fontSize: 12, color: T.dark }}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View style={{ marginTop: 16 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <MessageCircle size={16} color={T.dark} strokeWidth={1.7} />
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Messages
-            </Text>
-          </View>
-          {messages.map((message) => (
-            <ChatBubble key={message.id} message={message} />
-          ))}
-        </View>
-
-        <View
-          style={{
-            marginTop: 8,
-            borderRadius: 22,
-            padding: 16,
-            backgroundColor: T.white,
-            gap: 12,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.08,
-            shadowRadius: 14,
-            elevation: 3,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <HeartHandshake size={16} color={T.primaryDark} strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              Ready to reply
-            </Text>
-          </View>
-          <View
-            style={{
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: T.border,
-              backgroundColor: T.bg,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              minHeight: 96,
-            }}
-          >
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Write your message to the owner..."
-              placeholderTextColor={T.medium}
-              multiline
-              style={{
-                fontSize: 14,
-                color: T.dark,
-                fontFamily: FONT,
-                minHeight: 72,
-                textAlignVertical: "top",
-              }}
-            />
-          </View>
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1 }}>
+              />
               <TouchableOpacity
-                onPress={sendMessage}
+                onPress={send}
+                disabled={sending || !draft.trim()}
+                accessibilityRole="button" accessibilityLabel="Send message"
                 style={{
-                  borderRadius: 16,
-                  backgroundColor: T.primary,
-                  paddingVertical: 13,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: draft.trim() ? T.primary : T.light,
                   alignItems: "center",
                   justifyContent: "center",
-                  flexDirection: "row",
-                  gap: 8,
                 }}
               >
-                <Send size={16} color="#fff" strokeWidth={2} />
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "800",
-                    color: "#fff",
-                    fontFamily: FONT,
-                  }}
-                >
-                  Send Message
-                </Text>
+                <Send size={18} color="#fff" strokeWidth={2} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={() => navigate("request-received")}
-              style={{
-                paddingHorizontal: 16,
-                borderRadius: 16,
-                borderWidth: 1.5,
-                borderColor: T.primary,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: T.primary,
-                  fontFamily: FONT,
-                }}
-              >
-                Request
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Clock3 size={12} color={T.medium} strokeWidth={2} />
-            <Text style={{ fontSize: 12, color: T.medium }}>
-              Responses are only shared between owners.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Clock3 size={11} color={T.medium} />
+              <Text style={{ fontSize: 11, color: T.medium, fontFamily: FONT }}>Messages are only visible to the two owners.</Text>
+            </View>
+          </>
+        ) : (
+          <Text style={{ textAlign: "center", color: T.medium, fontFamily: FONT, paddingVertical: 8 }}>
+            This request was {r.status}. Messaging is closed.
+          </Text>
+        )}
+      </View>
+    </KeyboardAvoidingView>
   );
 }

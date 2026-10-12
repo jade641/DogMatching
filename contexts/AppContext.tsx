@@ -1,623 +1,324 @@
-// Enhanced Context with proper state management
-import { createContext, ReactNode, useCallback, useContext, useReducer } from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
-import { AppState, Conversation, Dog, LoadingState, MatchResult, Notification, Owner, Screen } from "../types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import * as api from "../services/api";
+import type { AppNotification, Dog, Screen, Session } from "../types";
 
-// Re-export types for convenience
-export type { Dog, Owner, Screen };
+type Params = Record<string, any>;
 
-/* ── Design Tokens ───────────────────────────────────────────── */
-export const T = {
-  // Primary Colors - ORANGE AS MAIN COLOR! 🟠
-  primary: "#FF7043", // Playful Orange - MAIN COLOR
-  primaryLight: "#FFE8E3", // Light orange background
-  primaryDark: "#D84315", // Dark orange for text
-
-  secondary: "#FFB84D", // Warm Yellow - cheerful and welcoming
-  secondaryLight: "#FFF3E0", // Light yellow background
-  secondaryDark: "#E69500", // Dark yellow
-
-  accent: "#4A90E2", // Soft Blue - calm and trustworthy
-  accentLight: "#E3F2FD", // Light blue background
-  accentDark: "#2E5C8A", // Dark blue
-
-  // Additional Colors
-  mintGreen: "#66D9B8", // Mint Green - fresh and nature-associated
-  mintGreenLight: "#E8F8F4", // Light mint background
-  mintGreenDark: "#3DAA87", // Dark mint
-
-  vibrantBlue: "#2196F3", // Vibrant Blue - engaging nod to canine vision
-
-  // Status colors
-  success: "#4CAF50",
-  warning: "#FF9800",
-  error: "#F44336",
-  info: "#2196F3",
-
-  // Neutrals
-  dark: "#2C2C2A", // Dark text
-  medium: "#888780", // Secondary text
-  light: "#D3D1C7", // Border/disabled
-  bg: "#F5F5F5", // Neutral white/light gray background
-  white: "#FFFFFF",
-  border: "#E0E0E0",
-
-  // Legacy aliases (for backward compatibility)
-  teal: "#FF7043", // Now orange (was blue)
-  tealLight: "#FFE8E3", // Light orange
-  tealDark: "#D84315", // Dark orange
-  amber: "#FFB84D", // Warm yellow
-  amberLight: "#FFF3E0",
-  coral: "#FF7043", // Orange
-  coralLight: "#FFE8E3",
-
-  // Shadows
-  shadow: "0 2px 8px rgba(0,0,0,0.08)",
-  shadowMd: "0 4px 16px rgba(0,0,0,0.10)",
-  shadowLg: "0 8px 24px rgba(0,0,0,0.12)",
-};
-
-export const FONT = "Roboto_400Regular";
-
-// Dog images from Unsplash
-const IMGS = {
-  bella: "https://images.unsplash.com/photo-1629740067905-bd3f515aa739?w=600&fit=crop",
-  choco: "https://images.unsplash.com/photo-1633722715463-d30f4f325e24?w=600&fit=crop",
-  luna: "https://images.unsplash.com/photo-1505628346881-b72b27e84530?w=600&fit=crop",
-  rex: "https://images.unsplash.com/photo-1539692177343-b2b990faef15?w=600&fit=crop",
-  kiko: "https://images.unsplash.com/photo-1721781010133-8eb0e9b23daf?w=600&fit=crop",
-  yuki: "https://images.unsplash.com/photo-1693615774176-a5560f55ac49?w=600&fit=crop",
-  ganda: "https://images.unsplash.com/photo-1693615774176-a5560f55ac49?w=600&fit=crop",
-  bruno: "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600&fit=crop",
-  max: "https://images.unsplash.com/photo-1568572933382-74d440642117?w=600&fit=crop",
-  rocky: "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=600&fit=crop",
-};
-
-export { IMGS };
-
-// Action types for reducer
-type AppAction =
-  | { type: 'SET_SCREEN'; payload: Screen }
-  | { type: 'SET_USER'; payload: Owner | null }
-  | { type: 'SET_SELECTED_DOG'; payload: Dog | null }
-  | { type: 'SET_MATCH_RESULTS'; payload: MatchResult[] }
-  | { type: 'SET_LOADING'; payload: { key: string; state: LoadingState } }
-  | { type: 'ADD_NOTIFICATION'; payload: Notification }
-  | { type: 'MARK_NOTIFICATION_READ'; payload: string }
-  | { type: 'SET_CONVERSATIONS'; payload: Conversation[] };
-
-// Enhanced app state
-interface EnhancedAppState extends AppState {
-  history: Screen[];
-  loadingStates: Record<string, LoadingState>;
-  preferences: {
-    notifications: boolean;
-    darkMode: boolean;
-    language: string;
-  };
-}
-
-const initialState: EnhancedAppState = {
-  screen: "landing" as Screen,
-  selectedDog: null,
-  currentUser: null,
-  isAuthenticated: false,
-  matchResults: [],
-  conversations: [],
-  notifications: [],
-  history: ["landing"],
-  loadingStates: {},
-  preferences: {
-    notifications: true,
-    darkMode: false,
-    language: 'en'
-  }
-};
-
-// Reducer function
-function appReducer(state: EnhancedAppState, action: AppAction): EnhancedAppState {
-  switch (action.type) {
-    case 'SET_SCREEN':
-      return {
-        ...state,
-        screen: action.payload,
-        history: [...state.history, action.payload].slice(-10) // Keep last 10 screens
-      };
-    case 'SET_USER':
-      return {
-        ...state,
-        currentUser: action.payload,
-        isAuthenticated: !!action.payload
-      };
-    case 'SET_SELECTED_DOG':
-      return {
-        ...state,
-        selectedDog: action.payload
-      };
-    case 'SET_MATCH_RESULTS':
-      return {
-        ...state,
-        matchResults: action.payload
-      };
-    case 'SET_LOADING':
-      return {
-        ...state,
-        loadingStates: {
-          ...state.loadingStates,
-          [action.payload.key]: action.payload.state
-        }
-      };
-    case 'ADD_NOTIFICATION':
-      return {
-        ...state,
-        notifications: [action.payload, ...state.notifications]
-      };
-    case 'MARK_NOTIFICATION_READ':
-      return {
-        ...state,
-        notifications: state.notifications.map(n =>
-          n.id === action.payload ? { ...n, read: true } : n
-        )
-      };
-    case 'SET_CONVERSATIONS':
-      return {
-        ...state,
-        conversations: action.payload
-      };
-    default:
-      return state;
-  }
-}
-
-// Context type
-interface AppContextType {
-  state: EnhancedAppState;
-  navigate: (screen: Screen, data?: any) => void;
-  goBack: () => void;
-  setUser: (user: Owner | null) => void;
-  setSelectedDog: (dog: Dog | null) => void;
-  setMatchResults: (results: MatchResult[]) => void;
-  setLoading: (key: string, loading: LoadingState) => void;
-  addNotification: (notification: Omit<Notification, 'id'>) => void;
-  markNotificationRead: (id: string) => void;
-  isLoading: (key: string) => boolean;
-  // Computed values
+interface Route {
   screen: Screen;
-  selectedDog: Dog | null;
-  currentUser: Owner | null;
-  userName: string;
+  params: Params;
 }
 
-const AppContext = createContext<AppContextType | null>(null);
+export interface Toast {
+  id: number;
+  title: string;
+  message?: string;
+  tone: "info" | "success" | "error";
+  notification?: AppNotification;
+}
 
-// Provider component
+/** Screens a signed-in user is moved away from automatically after sign-in. */
+const SIGNED_OUT_SCREENS: Screen[] = ["boot", "setup-required", "landing", "login", "register", "forgot-password", "verify-email"];
+const LANDING_SEEN_KEY = "pawmatch.landingSeen";
+
+export function homeScreenFor(session: Session): Screen {
+  return session.verifier && !session.owner ? "vet-dashboard" : "home";
+}
+
+interface AppContextValue {
+  screen: Screen;
+  params: Params;
+  canGoBack: boolean;
+  navigate: (screen: Screen, params?: Params) => void;
+  replace: (screen: Screen, params?: Params) => void;
+  goBack: () => void;
+  resetTo: (screen: Screen, params?: Params) => void;
+
+  session: Session | null;
+  bootError: string | null;
+  retryBoot: () => void;
+  refreshSession: () => Promise<Session | null>;
+  signOut: () => Promise<void>;
+  markLandingSeen: () => void;
+
+  myDogs: Dog[];
+  dogsLoaded: boolean;
+  reloadDogs: () => Promise<Dog[]>;
+  activeDog: Dog | null;
+  setActiveDogId: (id: string) => void;
+
+  notifications: AppNotification[];
+  unreadCount: number;
+  lastNotification: AppNotification | null;
+  reloadNotifications: () => Promise<void>;
+  markAllRead: () => Promise<void>;
+  openNotification: (n: AppNotification) => void;
+
+  toast: Toast | null;
+  showToast: (title: string, message?: string, tone?: Toast["tone"]) => void;
+  dismissToast: () => void;
+}
+
+const AppContext = createContext<AppContextValue | null>(null);
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(appReducer, initialState);
+  const [stack, setStack] = useState<Route[]>([{ screen: "boot", params: {} }]);
+  const [session, setSession] = useState<Session | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [myDogs, setMyDogs] = useState<Dog[]>([]);
+  const [dogsLoaded, setDogsLoaded] = useState(false);
+  const [activeDogId, setActiveDogId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [lastNotification, setLastNotification] = useState<AppNotification | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
 
-  const navigate = useCallback((screen: Screen, data?: any) => {
-    dispatch({ type: 'SET_SCREEN', payload: screen });
-    if (data && typeof data === 'object' && 'id' in data) {
-      dispatch({ type: 'SET_SELECTED_DOG', payload: data as Dog });
-    }
+  const route = stack[stack.length - 1];
+  const screenRef = useRef<Screen>(route.screen);
+  const sessionUidRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    screenRef.current = route.screen;
+  }, [route.screen]);
+
+  /* ── Navigation ──────────────────────────────────────────────── */
+  const navigate = useCallback((screen: Screen, params: Params = {}) => {
+    setStack((s) => [...s, { screen, params }].slice(-30));
   }, []);
-
+  const replace = useCallback((screen: Screen, params: Params = {}) => {
+    setStack((s) => [...s.slice(0, -1), { screen, params }]);
+  }, []);
   const goBack = useCallback(() => {
-    const previousScreen = state.history[state.history.length - 2];
-    if (previousScreen) {
-      dispatch({ type: 'SET_SCREEN', payload: previousScreen });
+    setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+  }, []);
+  const resetTo = useCallback((screen: Screen, params: Params = {}) => {
+    setStack([{ screen, params }]);
+  }, []);
+
+  /* ── Toasts ──────────────────────────────────────────────────── */
+  const showToast = useCallback((title: string, message?: string, tone: Toast["tone"] = "info") => {
+    setToast({ id: Date.now(), title, message, tone });
+  }, []);
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  /* ── Session & dogs ──────────────────────────────────────────── */
+  const reloadDogs = useCallback(async () => {
+    const uid = sessionUidRef.current;
+    if (!uid) return [];
+    const dogs = await api.listMyDogs(uid);
+    setMyDogs(dogs);
+    setDogsLoaded(true);
+    setActiveDogId((current) => (current && dogs.some((d) => d.id === current) ? current : (dogs[0]?.id ?? null)));
+    return dogs;
+  }, []);
+
+  const loadSession = useCallback(async () => {
+    const s = await api.fetchSession();
+    sessionUidRef.current = s?.user.id ?? null;
+    setSession(s);
+    if (s?.owner) {
+      await reloadDogs();
+    } else {
+      setMyDogs([]);
+      setDogsLoaded(true);
     }
-  }, [state.history]);
+    return s;
+  }, [reloadDogs]);
 
-  const setUser = useCallback((user: Owner | null) => {
-    dispatch({ type: 'SET_USER', payload: user });
+  const clearSignedInState = useCallback(() => {
+    sessionUidRef.current = null;
+    setSession(null);
+    setMyDogs([]);
+    setDogsLoaded(false);
+    setActiveDogId(null);
+    setNotifications([]);
+    setLastNotification(null);
   }, []);
 
-  const setSelectedDog = useCallback((dog: Dog | null) => {
-    dispatch({ type: 'SET_SELECTED_DOG', payload: dog });
+  const boot = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      resetTo("setup-required");
+      return;
+    }
+    setBootError(null);
+    resetTo("boot");
+    try {
+      const s = await loadSession();
+      if (s) {
+        resetTo(homeScreenFor(s));
+      } else {
+        const seen = await AsyncStorage.getItem(LANDING_SEEN_KEY).catch(() => null);
+        resetTo(seen ? "login" : "landing");
+      }
+    } catch (e) {
+      setBootError(api.errorMessage(e));
+    }
+  }, [loadSession, resetTo]);
+
+  useEffect(() => {
+    boot();
+    if (!isSupabaseConfigured) return;
+
+    const { data } = supabase.auth.onAuthStateChange((event, authSession) => {
+      if (event === "SIGNED_IN") {
+        const uid = authSession?.user.id ?? null;
+        if (!uid || uid === sessionUidRef.current) return;
+        // Defer: Supabase calls must not run inside the auth callback itself.
+        setTimeout(async () => {
+          try {
+            const s = await loadSession();
+            if (s && SIGNED_OUT_SCREENS.includes(screenRef.current)) resetTo(homeScreenFor(s));
+          } catch (e) {
+            showToast("Couldn't load your profile", api.errorMessage(e), "error");
+          }
+        }, 0);
+      } else if (event === "SIGNED_OUT") {
+        clearSignedInState();
+        resetTo("login");
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [boot, loadSession, resetTo, showToast, clearSignedInState]);
+
+  const refreshSession = useCallback(async () => {
+    try {
+      return await loadSession();
+    } catch (e) {
+      showToast("Couldn't refresh your profile", api.errorMessage(e), "error");
+      return null;
+    }
+  }, [loadSession, showToast]);
+
+  const signOut = useCallback(async () => {
+    try {
+      await api.signOut();
+    } catch {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    }
+    clearSignedInState();
+    resetTo("login");
+  }, [clearSignedInState, resetTo]);
+
+  const markLandingSeen = useCallback(() => {
+    AsyncStorage.setItem(LANDING_SEEN_KEY, "1").catch(() => undefined);
   }, []);
 
-  const setMatchResults = useCallback((results: MatchResult[]) => {
-    dispatch({ type: 'SET_MATCH_RESULTS', payload: results });
+  /* ── Notifications (Supabase Realtime) ───────────────────────── */
+  const reloadNotifications = useCallback(async () => {
+    try {
+      setNotifications(await api.listNotifications());
+    } catch {
+      // Non-critical; the list refreshes on the next visit.
+    }
   }, []);
 
-  const setLoading = useCallback((key: string, loading: LoadingState) => {
-    dispatch({ type: 'SET_LOADING', payload: { key, state: loading } });
+  const userId = session?.user.id;
+  useEffect(() => {
+    if (!userId) return;
+    reloadNotifications();
+    return api.subscribeToNotifications(userId, (n) => {
+      setNotifications((list) => [n, ...list.filter((x) => x.id !== n.id)]);
+      setLastNotification(n);
+      setToast({ id: Date.now(), title: n.title, message: n.body, tone: "info", notification: n });
+      if (n.type === "verification_result") reloadDogs().catch(() => undefined);
+    });
+  }, [userId, reloadNotifications, reloadDogs]);
+
+  const markAllRead = useCallback(async () => {
+    setNotifications((list) => list.map((n) => ({ ...n, read: true })));
+    await api.markNotificationsRead().catch(() => undefined);
   }, []);
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
-    const fullNotification: Notification = {
-      ...notification,
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 9)
-    };
-    dispatch({ type: 'ADD_NOTIFICATION', payload: fullNotification });
-  }, []);
+  const openNotification = useCallback(
+    (n: AppNotification) => {
+      if (!n.read) {
+        setNotifications((list) => list.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+        api.markNotificationsRead([n.id]).catch(() => undefined);
+      }
+      const d = n.data ?? {};
+      switch (n.type) {
+        case "match_request":
+        case "request_update":
+        case "message":
+          if (d.match_request_id) navigate("conversation", { requestId: Number(d.match_request_id) });
+          break;
+        case "review":
+          navigate("reputation");
+          break;
+        case "verification_request":
+          if (d.submission_id) navigate("vet-request-detail", { submissionId: d.submission_id });
+          break;
+        case "verification_result":
+          navigate("verify-status", { dogId: d.dog_id });
+          break;
+        case "match_alert":
+          if (d.for_dog_id) setActiveDogId(d.for_dog_id);
+          if (d.dog_id) navigate("match-profile", { dogId: d.dog_id });
+          break;
+        default:
+          navigate("notifications");
+      }
+    },
+    [navigate],
+  );
 
-  const markNotificationRead = useCallback((id: string) => {
-    dispatch({ type: 'MARK_NOTIFICATION_READ', payload: id });
-  }, []);
+  const activeDog = useMemo(
+    () => myDogs.find((d) => d.id === activeDogId) ?? myDogs[0] ?? null,
+    [myDogs, activeDogId],
+  );
 
-  const isLoading = useCallback((key: string) => {
-    return state.loadingStates[key] === 'loading';
-  }, [state.loadingStates]);
-
-  const contextValue: AppContextType = {
-    state,
+  const value: AppContextValue = {
+    screen: route.screen,
+    params: route.params,
+    canGoBack: stack.length > 1,
     navigate,
+    replace,
     goBack,
-    setUser,
-    setSelectedDog,
-    setMatchResults,
-    setLoading,
-    addNotification,
-    markNotificationRead,
-    isLoading,
-    // Computed values for backward compatibility
-    screen: state.screen,
-    selectedDog: state.selectedDog,
-    currentUser: state.currentUser,
-    userName: state.currentUser?.name || 'Juan',
+    resetTo,
+    session,
+    bootError,
+    retryBoot: boot,
+    refreshSession,
+    signOut,
+    markLandingSeen,
+    myDogs,
+    dogsLoaded,
+    reloadDogs,
+    activeDog,
+    setActiveDogId,
+    notifications,
+    unreadCount: notifications.filter((n) => !n.read).length,
+    lastNotification,
+    reloadNotifications,
+    markAllRead,
+    openNotification,
+    toast,
+    showToast,
+    dismissToast,
   };
 
-  return (
-    <AppContext.Provider value={contextValue}>
-      {children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-// Hook to use the context
-export function useV3() {
+export function useApp() {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useV3 must be used within an AppProvider');
-  }
+  if (!context) throw new Error("useApp must be used within an AppProvider");
   return context;
 }
 
-// Enhanced UI Components with better accessibility and design
-export function Btn({
-  children,
-  onClick,
-  variant = 'primary',
-  disabled = false,
-  loading = false,
-  size = 'medium',
-  icon
-}: {
-  children: string;
-  onClick: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
-  disabled?: boolean;
-  loading?: boolean;
-  size?: 'small' | 'medium' | 'large';
-  icon?: React.ReactNode;
-}) {
-  const getVariantStyles = () => {
-    switch (variant) {
-      case 'secondary':
-        return {
-          backgroundColor: T.secondary,
-          borderColor: T.secondary,
-        };
-      case 'outline':
-        return {
-          backgroundColor: 'transparent',
-          borderColor: T.primary,
-          borderWidth: 2,
-        };
-      case 'ghost':
-        return {
-          backgroundColor: 'transparent',
-          borderColor: 'transparent',
-        };
-      default:
-        return {
-          backgroundColor: T.primary,
-          borderColor: T.primary,
-        };
-    }
-  };
-
-  const getSizeStyles = () => {
-    switch (size) {
-      case 'small':
-        return { paddingVertical: 8, paddingHorizontal: 16, minHeight: 36 };
-      case 'large':
-        return { paddingVertical: 16, paddingHorizontal: 24, minHeight: 56 };
-      default:
-        return { paddingVertical: 12, paddingHorizontal: 20, minHeight: 48 };
-    }
-  };
-
-  const getTextColor = () => {
-    return variant === 'outline' || variant === 'ghost' ? T.primary : '#fff';
-  };
-
-  return (
-    <TouchableOpacity
-      onPress={onClick}
-      disabled={disabled || loading}
-      accessibilityRole="button"
-      accessibilityLabel={children}
-      accessibilityState={{ disabled: disabled || loading }}
-      style={[
-        {
-          borderRadius: 12,
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'row',
-          gap: icon ? 8 : 0,
-          opacity: disabled ? 0.6 : 1,
-          ...getVariantStyles(),
-          ...getSizeStyles(),
-        }
-      ]}
-    >
-      {loading ? (
-        <Text style={{ color: getTextColor(), fontWeight: '600' }}>Loading...</Text>
-      ) : (
-        <>
-          {icon}
-          <Text style={{
-            color: getTextColor(),
-            fontWeight: '600',
-            fontFamily: FONT,
-            fontSize: size === 'small' ? 14 : size === 'large' ? 18 : 16
-          }}>
-            {children}
-          </Text>
-        </>
-      )}
-    </TouchableOpacity>
-  );
+/** Signed-in session; only call from screens that require authentication. */
+export function useSession(): Session {
+  const { session } = useApp();
+  if (!session) throw new Error("This screen requires a signed-in user");
+  return session;
 }
-
-export function Field({
-  label,
-  value,
-  onChange,
-  onBlur,
-  placeholder,
-  secure = false,
-  error,
-  multiline = false,
-  autoCapitalize = 'sentences'
-}: {
-  label?: string;
-  value: string;
-  onChange: (text: string) => void;
-  onBlur?: () => void;
-  placeholder?: string;
-  secure?: boolean;
-  error?: string;
-  multiline?: boolean;
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
-}) {
-  return (
-    <View style={{ marginBottom: 16 }}>
-      {label && (
-        <Text style={{
-          fontSize: 14,
-          fontWeight: '600',
-          color: T.dark,
-          marginBottom: 6,
-          fontFamily: FONT
-        }}>
-          {label}
-        </Text>
-      )}
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        secureTextEntry={secure}
-        multiline={multiline}
-        autoCapitalize={autoCapitalize}
-        accessibilityLabel={label}
-        style={{
-          borderWidth: 1,
-          borderColor: error ? T.error : T.border,
-          borderRadius: 12,
-          paddingHorizontal: 16,
-          paddingVertical: multiline ? 16 : 12,
-          fontSize: 16,
-          fontFamily: FONT,
-          backgroundColor: T.white,
-          minHeight: multiline ? 100 : 48,
-          textAlignVertical: multiline ? 'top' : 'center'
-        }}
-      />
-      {error && (
-        <Text style={{
-          fontSize: 12,
-          color: T.error,
-          marginTop: 4,
-          fontFamily: FONT
-        }}>
-          {error}
-        </Text>
-      )}
-    </View>
-  );
-}
-
-// Mock data with proper types
-export const MOCK_DOGS: Dog[] = [
-  {
-    id: "1",
-    name: "Bella",
-    breed: "Shih Tzu",
-    sex: "female",
-    age: 3,
-    size: "small",
-    color: "Brown and White",
-    temperament: ["Friendly", "Energetic", "Loyal"],
-    location: "Davao City",
-    images: [IMGS.bella],
-    verificationTier: 2,
-    healthRecords: [],
-    owner: {
-      id: "owner1",
-      name: "Maria Santos",
-      avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=MS",
-      location: "Davao City, Philippines",
-      memberSince: "2023-01-15",
-      reputation: 4.8,
-      totalMatches: 12,
-      successfulBreedings: 8,
-      verificationStatus: "verified",
-      badges: []
-    },
-    description: "Bella is a loving and energetic Shih Tzu looking for a compatible mate.",
-    lastActive: "2024-01-15"
-  },
-  {
-    id: "2",
-    name: "Max",
-    breed: "Siberian Husky",
-    sex: "male",
-    age: 4,
-    size: "large",
-    color: "Grey and White",
-    temperament: ["Loyal", "Protective", "Intelligent"],
-    location: "Matina, Davao",
-    images: [IMGS.max],
-    verificationTier: 3,
-    healthRecords: [],
-    owner: {
-      id: "owner2",
-      name: "Carlos Reyes",
-      avatar: "https://via.placeholder.com/100x100/FF6B6B/ffffff?text=CR",
-      location: "Matina, Davao",
-      memberSince: "2022-08-20",
-      reputation: 4.9,
-      totalMatches: 18,
-      successfulBreedings: 12,
-      verificationStatus: "verified",
-      badges: []
-    },
-    description: "Max is a strong and intelligent Siberian Husky with excellent pedigree.",
-    lastActive: "2024-01-16"
-  },
-  {
-    id: "3",
-    name: "Luna",
-    breed: "Shiba Inu",
-    sex: "female",
-    age: 2,
-    size: "medium",
-    color: "Red and White",
-    temperament: ["Playful", "Friendly", "Active"],
-    location: "Buhangin, Davao",
-    images: [IMGS.luna],
-    verificationTier: 2,
-    healthRecords: [],
-    owner: {
-      id: "owner3",
-      name: "Anna Cruz",
-      avatar: "https://via.placeholder.com/100x100/9370DB/ffffff?text=AC",
-      location: "Buhangin, Davao",
-      memberSince: "2023-03-10",
-      reputation: 4.7,
-      totalMatches: 8,
-      successfulBreedings: 5,
-      verificationStatus: "verified",
-      badges: []
-    },
-    description: "Luna is a beautiful and playful Shiba Inu with a great temperament.",
-    lastActive: "2024-01-14"
-  },
-  {
-    id: "4",
-    name: "Rocky",
-    breed: "Beagle",
-    sex: "male",
-    age: 3,
-    size: "medium",
-    color: "Tricolor",
-    temperament: ["Calm", "Friendly", "Gentle"],
-    location: "Toril, Davao",
-    images: [IMGS.rocky],
-    verificationTier: 1,
-    healthRecords: [],
-    owner: {
-      id: "owner4",
-      name: "Jose Garcia",
-      avatar: "https://via.placeholder.com/100x100/20B2AA/ffffff?text=JG",
-      location: "Toril, Davao",
-      memberSince: "2023-06-15",
-      reputation: 4.6,
-      totalMatches: 5,
-      successfulBreedings: 3,
-      verificationStatus: "verified",
-      badges: []
-    },
-    description: "Rocky is a calm and gentle Beagle, perfect for breeding.",
-    lastActive: "2024-01-13"
-  },
-];
-
-export const MOCK_VERIFIERS = [
-  {
-    id: "1",
-    name: "Dr. Juan Veterinarian",
-    type: "Licensed Veterinarian" as const,
-    rating: 4.9,
-    experience: "15 years",
-    location: "Davao City",
-    specialties: ["Breeding Health", "Genetic Testing"],
-    avatar: "JV",
-    role: "Licensed Veterinarian",
-    clinic: "Davao Animal Clinic",
-    available: true
-  }
-];
-
-// Legacy components for backward compatibility
-export const Chip = ({ children, active, onPress }: { children: string; active?: boolean; onPress?: () => void }) => (
-  <TouchableOpacity
-    onPress={onPress}
-    disabled={!onPress}
-    style={{
-      backgroundColor: active ? T.primary : T.primaryLight,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      alignSelf: 'flex-start'
-    }}
-  >
-    <Text style={{ color: active ? '#fff' : T.primary, fontSize: 12, fontWeight: '600' }}>
-      {children}
-    </Text>
-  </TouchableOpacity>
-);
-
-export const VeriBadge = ({ tier }: { tier: 1 | 2 | 3 }) => (
-  <View style={{
-    backgroundColor: tier === 3 ? T.amber : tier === 2 ? T.teal : T.medium,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  }}>
-    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
-      TIER {tier}
-    </Text>
-  </View>
-);
-
-export const ScoreBar = ({ score }: { score: number }) => (
-  <View style={{
-    height: 6,
-    backgroundColor: T.bg,
-    borderRadius: 3,
-    overflow: 'hidden',
-    flex: 1
-  }}>
-    <View style={{
-      width: `${score}%`,
-      height: '100%',
-      backgroundColor: score > 80 ? T.success : score > 60 ? T.warning : T.error
-    }} />
-  </View>
-);

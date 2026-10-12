@@ -1,1 +1,1 @@
-// Placeholder constants index\n
+export * from "./theme";

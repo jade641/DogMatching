@@ -1,1195 +1,679 @@
-import { Eye, EyeOff, Heart, PawPrint, ShieldCheck, Users } from "lucide-react-native";
+import { Check, Heart, KeyRound, Mail, PawPrint, ShieldCheck, Stethoscope, Users } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Alert, Image as ReactNativeImage, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Btn, Field, FONT, T, useV3 } from "../contexts/AppContext";
-import { RegistrationForm } from "../types";
-import { FormValidator, registrationSchema, useFormValidation } from "../utils/validation";
-import { LoadingSpinner } from "./LoadingSpinner";
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  DAVAO_DISTRICTS,
+  DEFAULT_LOCATION,
+  districtLocation,
+  FONT,
+  FONT_BOLD,
+  FONT_MEDIUM,
+  T,
+} from "../constants/theme";
+import { homeScreenFor, useApp } from "../contexts/AppContext";
+import * as api from "../services/api";
+import type { VerifierRole } from "../types";
+import { Btn, Chip, ErrorView, Field, showMessage } from "./ui";
 
-/* ── Splash Screen ────────────────────────────────────────────── */
-export function Splash() {
-  const { navigate } = useV3();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  useEffect(() => {
-    const timer = setTimeout(() => navigate("onboarding"), 2000);
-    return () => clearTimeout(timer);
-  }, [navigate]);
+function validatePassword(password: string): string | undefined {
+  if (password.length < 8) return "Use at least 8 characters";
+  if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) return "Include at least one letter and one number";
+  return undefined;
+}
 
+function AuthLayout({ children, title, subtitle, icon: Icon = PawPrint }: {
+  children: React.ReactNode;
+  title: string;
+  subtitle: string;
+  icon?: typeof PawPrint;
+}) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.container, { backgroundColor: T.primary }]}>
-      <View style={styles.centerContent}>
-        <View style={styles.splashLogoContainer}>
-          <Heart size={60} color="#fff" strokeWidth={2} />
-        </View>
-        <View>
-          <Text style={[styles.splashTitle, { fontFamily: FONT }]}>
-            PawMatch
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.white }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 24, paddingTop: Math.max(insets.top, 16) + 24, paddingBottom: 40 }}
+      >
+        <View style={{ alignItems: "center", marginBottom: 28 }}>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              backgroundColor: T.primaryLight,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 14,
+            }}
+          >
+            <Icon size={34} color={T.primary} strokeWidth={1.75} />
+          </View>
+          <Text style={{ fontSize: 26, color: T.dark, fontFamily: FONT_BOLD }}>{title}</Text>
+          <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT, marginTop: 6, textAlign: "center" }}>
+            {subtitle}
           </Text>
-          <Text style={[styles.splashSubtitle, { fontFamily: FONT }]}>
-            Verified. Local. Trusted.
-          </Text>
         </View>
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function TextLink({ prefix, label, onPress }: { prefix?: string; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={{ alignItems: "center", paddingVertical: 14 }}>
+      <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT }}>
+        {prefix ? `${prefix} ` : ""}
+        <Text style={{ color: T.primary, fontFamily: FONT_BOLD }}>{label}</Text>
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+/* ── Boot ───────────────────────────────────────────────────────── */
+export function BootScreen() {
+  const { bootError, retryBoot } = useApp();
+  return (
+    <View style={{ flex: 1, backgroundColor: T.primary, alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <View
+        style={{
+          width: 110,
+          height: 110,
+          borderRadius: 55,
+          backgroundColor: "rgba(255,255,255,0.2)",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 20,
+        }}
+      >
+        <Heart size={54} color="#fff" strokeWidth={2} />
       </View>
-      <View style={styles.loadingDots}>
-        {[0, 1, 2].map((i) => (
-          <View key={i} style={styles.dot} />
-        ))}
+      <Text style={{ fontSize: 32, color: "#fff", fontFamily: FONT_BOLD }}>PawMatch</Text>
+      <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 6 }}>
+        Verified. Local. Trusted.
+      </Text>
+      <View style={{ marginTop: 40, minHeight: 120, alignSelf: "stretch" }}>
+        {bootError ? (
+          <View style={{ backgroundColor: T.white, borderRadius: 16 }}>
+            <ErrorView message={bootError} onRetry={retryBoot} />
+          </View>
+        ) : (
+          <ActivityIndicator color="#fff" size="large" />
+        )}
       </View>
     </View>
   );
 }
 
-/* ── Onboarding Carousel ─────────────────────────────────────── */
-const SLIDES = [
+/* ── Backend not configured ─────────────────────────────────────── */
+export function SetupRequired() {
+  return (
+    <AuthLayout title="Setup required" subtitle="PawMatch can't connect to its backend yet." icon={KeyRound}>
+      <View style={{ backgroundColor: T.bg, borderRadius: 16, padding: 16, gap: 8 }}>
+        <Text style={{ fontFamily: FONT_BOLD, color: T.dark }}>For the development team</Text>
+        <Text style={{ fontFamily: FONT, color: T.dark, lineHeight: 20 }}>
+          Create a <Text style={{ fontFamily: FONT_BOLD }}>.env</Text> file in the project root with your Supabase
+          project URL and anon key, then restart Expo:
+        </Text>
+        <Text style={{ fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 12, color: T.dark }}>
+          EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co{"\n"}EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+        </Text>
+        <Text style={{ fontFamily: FONT, color: T.medium, lineHeight: 20 }}>
+          See BETA-TESTING.md for the full backend setup.
+        </Text>
+      </View>
+    </AuthLayout>
+  );
+}
+
+/* ── Landing carousel ───────────────────────────────────────────── */
+const LANDING_PAGES = [
   {
-    Icon: Heart,
+    icon: Heart,
     title: "Find Your Dog's Perfect Match",
-    sub: "Smart compatibility scoring for responsible breeding in Davao City.",
+    description: "Smart compatibility scoring for responsible breeding in Davao City.",
   },
   {
-    Icon: ShieldCheck,
+    icon: ShieldCheck,
     title: "Verified Health Records",
-    sub: "Upload documents and get verified by licensed vets or certified breeders.",
+    description: "Upload documents and get verified by licensed vets or certified breeders.",
   },
   {
-    Icon: Users,
-    title: "Trusted Community",
-    sub: "Connect with verified dog owners and build lasting relationships.",
+    icon: Users,
+    title: "Connect with Confidence",
+    description: "Reputation pages, badges, and interaction history so you always know who you're dealing with.",
   },
 ];
 
-export function Onboarding() {
-  const { navigate } = useV3();
-  const [currentSlide, setCurrentSlide] = useState(0);
+export function Landing() {
+  const { navigate, markLandingSeen } = useApp();
+  const [page, setPage] = useState(0);
+  const insets = useSafeAreaInsets();
+  const content = LANDING_PAGES[page];
+  const Icon = content.icon;
+  const last = page === LANDING_PAGES.length - 1;
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % SLIDES.length);
-    }, 3000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const slide = SLIDES[currentSlide];
+  const finish = () => {
+    markLandingSeen();
+    navigate("login");
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: T.primary }]}>
-      <View style={styles.centerContent}>
-        <View style={styles.onboardingIconContainer}>
-          <slide.Icon size={80} color="#fff" strokeWidth={1.5} />
+    <View style={{ flex: 1, backgroundColor: T.white, paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 16) + 8, paddingHorizontal: 24 }}>
+      <View style={{ alignItems: "flex-end" }}>
+        <TouchableOpacity onPress={finish} style={{ padding: 8 }}>
+          <Text style={{ fontSize: 16, color: T.medium, fontFamily: FONT_MEDIUM }}>Skip</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View
+          style={{
+            width: 190,
+            height: 190,
+            borderRadius: 32,
+            backgroundColor: T.primaryLight,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 36,
+          }}
+        >
+          <Icon size={80} color={T.primary} strokeWidth={1.5} />
         </View>
-        <Text style={[styles.onboardingTitle, { fontFamily: FONT }]}>
-          {slide.title}
+        <Text style={{ fontSize: 26, lineHeight: 34, color: T.dark, fontFamily: FONT_BOLD, textAlign: "center" }}>
+          {content.title}
         </Text>
-        <Text style={[styles.onboardingSub, { fontFamily: FONT }]}>
-          {slide.sub}
+        <Text style={{ fontSize: 16, lineHeight: 24, color: T.medium, fontFamily: FONT, textAlign: "center", marginTop: 14 }}>
+          {content.description}
         </Text>
       </View>
-
-      <View style={styles.onboardingFooter}>
-        <View style={styles.slideIndicators}>
-          {SLIDES.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.slideIndicator,
-                { opacity: i === currentSlide ? 1 : 0.4 },
-              ]}
-            />
-          ))}
-        </View>
-        <View style={styles.onboardingButtons}>
-          <Btn
-            onClick={() => navigate("register")}
-            variant="secondary"
-          >
-            Get Started
-          </Btn>
-          <TouchableOpacity
-            onPress={() => navigate("login")}
-            style={styles.loginLink}
-          >
-            <Text style={[styles.loginLinkText, { fontFamily: FONT }]}>
-              Already have an account? Sign In
-            </Text>
-          </TouchableOpacity>
-        </View>
+      <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 28 }}>
+        {LANDING_PAGES.map((_, i) => (
+          <View
+            key={i}
+            style={{ height: 8, width: i === page ? 24 : 8, borderRadius: 4, backgroundColor: i === page ? T.primary : T.light }}
+          />
+        ))}
       </View>
+      <Btn title={last ? "Get Started" : "Next →"} size="large" onPress={() => (last ? finish() : setPage(page + 1))} />
     </View>
   );
 }
 
-/* ── Enhanced Registration ─────────────────────────────────────── */
-export function Register() {
-  const { navigate, setUser, setLoading, isLoading } = useV3();
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+/* ── Login ──────────────────────────────────────────────────────── */
+const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD;
+const DEMO_ACCOUNTS = [
+  { label: "Dog Owner", email: "demo.owner@pawmatch.app" },
+  { label: "Veterinarian", email: "demo.vet@pawmatch.app" },
+];
 
-  const {
-    data,
-    errors,
-    touched,
-    setFieldValue,
-    setFieldTouched,
-    validateForm
-  } = useFormValidation<RegistrationForm>({
-    ownerName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    location: 'Davao City',
-    phoneNumber: '',
-    agreeToTerms: false
-  }, {
-    ...registrationSchema,
-    confirmPassword: [
-      FormValidator.required('Please confirm your password')
-    ]
-  });
-
-  // Update confirm password validation when password changes
-  useEffect(() => {
-    if (data.password && touched.confirmPassword) {
-      const matchRule = FormValidator.matchField(data.password, 'password');
-      const error = FormValidator.validateField(data.confirmPassword, [matchRule]);
-      // Update errors manually since we can't modify the schema dynamically
-    }
-  }, [data.password, data.confirmPassword, touched.confirmPassword]);
-
-  const handleRegister = async () => {
-    const validation = validateForm();
-    if (!validation.isValid) {
-      Alert.alert('Validation Error', 'Please fix the errors before continuing.');
-      return;
-    }
-
-    if (data.password !== data.confirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match.');
-      return;
-    }
-
-    if (!data.agreeToTerms) {
-      Alert.alert('Terms Required', 'Please agree to the terms and conditions.');
-      return;
-    }
-
-    setLoading('register', 'loading');
-
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Mock successful registration
-      const newUser = {
-        id: Date.now().toString(),
-        name: data.ownerName,
-        avatar: `https://via.placeholder.com/100x100/4A90E2/ffffff?text=${data.ownerName.charAt(0)}`,
-        location: data.location,
-        memberSince: new Date().toISOString(),
-        reputation: 0,
-        totalMatches: 0,
-        successfulBreedings: 0,
-        verificationStatus: 'unverified' as const,
-        badges: []
-      };
-
-      setUser(newUser);
-      setLoading('register', 'success');
-      navigate("home");
-    } catch (error) {
-      setLoading('register', 'error');
-      Alert.alert('Registration Failed', 'Please try again later.');
-    }
-  };
-
-  if (isLoading('register')) {
-    return (
-      <View style={styles.container}>
-        <LoadingSpinner message="Creating your account..." />
-      </View>
-    );
-  }
-
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <TouchableOpacity
-        onPress={() => navigate("onboarding")}
-        style={styles.backButton}
-      >
-        <Text style={styles.backButtonText}> </Text>
-      </TouchableOpacity>
-
-      <View style={styles.authHeader}>
-        <PawPrint size={40} color={T.primary} />
-        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
-          Join PawMatch
-        </Text>
-        <Text style={[styles.authSubtitle, { fontFamily: FONT }]}>
-          Create your account to start matching
-        </Text>
-      </View>
-
-      <View style={styles.authForm}>
-        <Field
-          label="Full Name"
-          value={data.ownerName}
-          onChange={(text) => setFieldValue('ownerName', text)}
-          onBlur={() => setFieldTouched('ownerName')}
-          placeholder="Enter your full name"
-          error={touched.ownerName ? errors.ownerName : undefined}
-        />
-
-        <Field
-          label="Email Address"
-          value={data.email}
-          onChange={(text) => setFieldValue('email', text)}
-          onBlur={() => setFieldTouched('email')}
-          placeholder="Enter your email"
-          autoCapitalize="none"
-          error={touched.email ? errors.email : undefined}
-        />
-
-        <View style={{ position: 'relative' }}>
-          <Field
-            label="Password"
-            value={data.password}
-            onChange={(text) => setFieldValue('password', text)}
-            onBlur={() => setFieldTouched('password')}
-            placeholder="Create a password"
-            secure={!showPassword}
-            error={touched.password ? errors.password : undefined}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.passwordToggle}
-          >
-            {showPassword ?
-              <EyeOff size={20} color={T.medium} /> :
-              <Eye size={20} color={T.medium} />
-            }
-          </TouchableOpacity>
-        </View>
-
-        <View style={{ position: 'relative' }}>
-          <Field
-            label="Confirm Password"
-            value={data.confirmPassword}
-            onChange={(text) => setFieldValue('confirmPassword', text)}
-            onBlur={() => setFieldTouched('confirmPassword')}
-            placeholder="Confirm your password"
-            secure={!showConfirmPassword}
-            error={touched.confirmPassword && data.password !== data.confirmPassword ? 'Passwords do not match' : undefined}
-          />
-          <TouchableOpacity
-            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-            style={styles.passwordToggle}
-          >
-            {showConfirmPassword ?
-              <EyeOff size={20} color={T.medium} /> :
-              <Eye size={20} color={T.medium} />
-            }
-          </TouchableOpacity>
-        </View>
-
-        <Field
-          label="Location"
-          value={data.location}
-          onChange={(text) => setFieldValue('location', text)}
-          onBlur={() => setFieldTouched('location')}
-          placeholder="Your city"
-          error={touched.location ? errors.location : undefined}
-        />
-
-        <Field
-          label="Phone Number"
-          value={data.phoneNumber}
-          onChange={(text) => setFieldValue('phoneNumber', text)}
-          onBlur={() => setFieldTouched('phoneNumber')}
-          placeholder="Your phone number"
-          error={touched.phoneNumber ? errors.phoneNumber : undefined}
-        />
-
-        <TouchableOpacity
-          onPress={() => setFieldValue('agreeToTerms', !data.agreeToTerms)}
-          style={styles.checkboxContainer}
-        >
-          <View style={[styles.checkbox, data.agreeToTerms && styles.checkboxChecked]}>
-            {data.agreeToTerms && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={[styles.checkboxLabel, { fontFamily: FONT }]}>
-            I agree to the Terms of Service and Privacy Policy
-          </Text>
-        </TouchableOpacity>
-
-        <Btn onClick={handleRegister} size="large">
-          Create Account
-        </Btn>
-
-        <TouchableOpacity
-          onPress={() => navigate("login")}
-          style={styles.switchAuthMode}
-        >
-          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
-            Already have an account? <Text style={styles.switchAuthLink}>Sign In</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  );
-}
-
-/* ── Enhanced Login ─────────────────────────────────────────── */
 export function Login() {
-  const { navigate, setUser, setLoading, isLoading } = useV3();
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const { navigate } = useApp();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
 
-  const validateEmail = (email: string) => {
-    const emailRule = FormValidator.email();
-    const requiredRule = FormValidator.required('Email is required');
+  const submit = async () => {
+    const next: typeof errors = {};
+    if (!EMAIL_RE.test(email.trim())) next.email = "Enter a valid email address";
+    if (!password) next.password = "Password is required";
+    setErrors(next);
+    if (Object.keys(next).length) return;
 
-    let error = FormValidator.validateField(email, [requiredRule]);
-    if (!error) {
-      error = FormValidator.validateField(email, [emailRule]);
-    }
-
-    setEmailError(error || '');
-    return !error;
-  };
-
-  const validatePassword = (password: string) => {
-    const requiredRule = FormValidator.required('Password is required');
-    const error = FormValidator.validateField(password, [requiredRule]);
-    setPasswordError(error || '');
-    return !error;
-  };
-
-  const handleLogin = async () => {
-    const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
-
-    if (!isEmailValid || !isPasswordValid) {
-      return;
-    }
-
-    setLoading('login', 'loading');
-
+    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Check if veterinarian login
-      if (email === 'vet@pawmatch.com' && password === 'vet123') {
-        // Veterinarian login
-        const vet = {
-          id: "vet1",
-          name: "Dr. Maria Santos",
-          avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=MS",
-          location: "Davao City",
-          memberSince: "2020-01-01",
-          reputation: 4.9,
-          totalMatches: 0,
-          successfulBreedings: 0,
-          verificationStatus: 'verified' as const,
-          badges: [],
-          role: 'veterinarian' as const,
-          email: 'vet@pawmatch.com',
-        };
-
-        setUser(vet);
-        setLoading('login', 'success');
-        navigate("vet-dashboard");
-      } else {
-        // Regular user login
-        const user = {
-          id: "1",
-          name: "Juan dela Cruz",
-          avatar: "https://via.placeholder.com/100x100/4A90E2/ffffff?text=JC",
-          location: "Davao City",
-          memberSince: "2023-01-15",
-          reputation: 4.8,
-          totalMatches: 12,
-          successfulBreedings: 8,
-          verificationStatus: 'verified' as const,
-          badges: [],
-          role: 'breeder' as const,
-        };
-
-        setUser(user);
-        setLoading('login', 'success');
-        navigate("home");
+      await api.signIn(email, password);
+      // Navigation happens in AppProvider once the session is loaded.
+    } catch (e) {
+      setLoading(false);
+      if (api.isEmailNotConfirmed(e)) {
+        const address = email.trim().toLowerCase();
+        api.resendSignupCode(address).catch(() => undefined);
+        navigate("verify-email", { email: address });
+        return;
       }
-    } catch (error) {
-      setLoading('login', 'error');
-      Alert.alert('Login Failed', 'Invalid email or password.');
+      showMessage("Sign in failed", api.errorMessage(e));
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    Alert.alert('Social Login', `${provider} login will be implemented soon!`);
+  const social = async (provider: "google" | "facebook") => {
+    setSocialLoading(provider);
+    try {
+      await api.signInWithProvider(provider);
+    } catch (e) {
+      showMessage("Sign in failed", api.errorMessage(e));
+    } finally {
+      setSocialLoading(null);
+    }
   };
-
-  if (isLoading('login')) {
-    return (
-      <View style={styles.container}>
-        <LoadingSpinner message="Signing you in..." />
-      </View>
-    );
-  }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <TouchableOpacity
-        onPress={() => navigate("onboarding")}
-        style={styles.backButton}
-      >
-        <Text style={styles.backButtonText}></Text>
+    <AuthLayout title="Welcome Back" subtitle="Sign in to your PawMatch account">
+      <Field
+        label="Email Address"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        error={errors.email}
+      />
+      <Field
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Enter your password"
+        secure
+        autoComplete="password"
+        textContentType="password"
+        error={errors.password}
+        onSubmitEditing={submit}
+      />
+      <TouchableOpacity onPress={() => navigate("forgot-password", { email })} style={{ alignSelf: "flex-end", marginBottom: 18 }}>
+        <Text style={{ color: T.primary, fontFamily: FONT_BOLD, fontSize: 14 }}>Forgot Password?</Text>
       </TouchableOpacity>
+      <Btn title="Sign In" size="large" loading={loading} onPress={submit} />
 
-      <View style={styles.authHeader}>
-        <PawPrint size={40} color={T.primary} />
-        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
-          Welcome Back
-        </Text>
-        <Text style={[styles.authSubtitle, { fontFamily: FONT }]}>
-          Sign in to your PawMatch account
-        </Text>
-      </View>
+      {api.socialLoginEnabled && (
+        <>
+          <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 20 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+            <Text style={{ marginHorizontal: 12, color: T.medium, fontFamily: FONT }}>or</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
+          </View>
+          <View style={{ gap: 12 }}>
+            {(["google", "facebook"] as const).map((provider) => (
+              <TouchableOpacity
+                key={provider}
+                onPress={() => social(provider)}
+                disabled={!!socialLoading}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 12,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: provider === "google" ? "rgba(255,99,27,0.3)" : "rgba(0,86,255,0.3)",
+                }}
+              >
+                {socialLoading === provider ? (
+                  <ActivityIndicator color={T.primary} />
+                ) : (
+                  <Image
+                    source={provider === "google" ? require("./Logo/google.png") : require("./Logo/facebook.png")}
+                    style={{ width: 24, height: 24 }}
+                    resizeMode="contain"
+                  />
+                )}
+                <Text
+                  style={{ fontSize: 15, fontFamily: FONT_BOLD, color: provider === "google" ? "#ff631b" : "#0056ff" }}
+                >
+                  Continue with {provider === "google" ? "Google" : "Facebook"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
 
-      <View style={styles.authForm}>
-        <Field
-          label="Email Address"
-          value={email}
-          onChange={setEmail}
-          onBlur={() => validateEmail(email)}
-          placeholder="Enter your email"
-          autoCapitalize="none"
-          error={emailError}
-        />
+      <TextLink prefix="Don't have an account?" label="Sign Up" onPress={() => navigate("register")} />
 
-        <View style={{ position: 'relative' }}>
-          <Field
-            label="Password"
-            value={password}
-            onChange={setPassword}
-            onBlur={() => validatePassword(password)}
-            placeholder="Enter your password"
-            secure={!showPassword}
-            error={passwordError}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.passwordToggle}
-          >
-            {showPassword ?
-              <EyeOff size={20} color={T.medium} /> :
-              <Eye size={20} color={T.medium} />
-            }
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity 
-          onPress={() => navigate("forgot-password")}
-          style={styles.forgotPassword}
-        >
-          <Text style={[styles.forgotPasswordText, { fontFamily: FONT }]}>
-            Forgot Password?
-          </Text>
-        </TouchableOpacity>
-
-        <Btn onClick={handleLogin} size="large">
-          Sign In
-        </Btn>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={[styles.dividerText, { fontFamily: FONT }]}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.socialLogins}>
-          <TouchableOpacity
-            onPress={() => handleSocialLogin('Google')}
-            style={styles.socialButton}
-            activeOpacity={0.7}
-          >
-            <ReactNativeImage
-              source={require('../components/Logo/google.png')}
-              style={styles.socialIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.socialButtonText}>
-              Continue with Google
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => handleSocialLogin('Facebook')}
-            style={[styles.socialButton, styles.facebookButton]}
-            activeOpacity={0.7}
-          >
-            <ReactNativeImage
-              source={require('../components/Logo/facebook.png')}
-              style={styles.facebookIcon}
-              resizeMode="contain"
-            />
-            <Text style={styles.facebookButtonText}>
-              Continue with Facebook
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => navigate("register")}
-          style={styles.switchAuthMode}
-        >
-          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
-            Don't have an account? <Text style={styles.switchAuthLink}>Sign Up</Text>
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.demoSection}>
-          <Text style={[styles.demoTitle, { fontFamily: FONT }]}>Demo Access</Text>
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <TouchableOpacity
-              onPress={() => {
-                setEmail('demo@pawmatch.com');
-                setPassword('demo123');
-              }}
-              style={[styles.demoButton, { flex: 1 }]}
-            >
-              <Text style={[styles.demoButtonText, { fontFamily: FONT }]}>
-                Dog Breeder
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                setEmail('vet@pawmatch.com');
-                setPassword('vet123');
-              }}
-              style={[styles.demoButton, { flex: 1, backgroundColor: T.accentLight }]}
-            >
-              <Text style={[styles.demoButtonText, { fontFamily: FONT, color: T.accent }]}>
-                Veterinarian
-              </Text>
-            </TouchableOpacity>
+      {DEMO_PASSWORD ? (
+        <View style={{ marginTop: 8, padding: 14, backgroundColor: T.bg, borderRadius: 12, alignItems: "center", gap: 10 }}>
+          <Text style={{ fontSize: 13, color: T.dark, fontFamily: FONT_BOLD }}>Demo Access (beta)</Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            {DEMO_ACCOUNTS.map((d) => (
+              <Chip
+                key={d.email}
+                label={d.label}
+                onPress={() => {
+                  setEmail(d.email);
+                  setPassword(DEMO_PASSWORD);
+                }}
+              />
+            ))}
           </View>
         </View>
-      </View>
-    </ScrollView>
+      ) : null}
+    </AuthLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: T.white,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  splashLogoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  splashTitle: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  splashSubtitle: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.8)",
-    textAlign: "center",
-  },
-  loadingDots: {
-    flexDirection: "row",
-    gap: 8,
-    position: "absolute",
-    bottom: 60,
-    alignSelf: "center",
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.6)",
-  },
-  onboardingIconContainer: {
-    marginBottom: 32,
-  },
-  onboardingTitle: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 16,
-    paddingHorizontal: 20,
-  },
-  onboardingSub: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.8)",
-    textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: 32,
-  },
-  onboardingFooter: {
-    padding: 20,
-  },
-  slideIndicators: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 32,
-  },
-  slideIndicator: {
-    width: 24,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#fff",
-  },
-  onboardingButtons: {
-    gap: 12,
-  },
-  loginLink: {
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  loginLinkText: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 14,
-  },
-  backButton: {
-    marginBottom: 20,
-  },
-  backButtonText: {
-    color: T.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  authHeader: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  authTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: T.dark,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  authSubtitle: {
-    fontSize: 16,
-    color: T.medium,
-    textAlign: 'center',
-  },
-  authForm: {
-    gap: 16,
-  },
-  passwordToggle: {
-    position: 'absolute',
-    right: 16,
-    top: 38,
-    padding: 4,
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginVertical: 8,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: T.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: T.primary,
-    borderColor: T.primary,
-  },
-  checkmark: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  checkboxLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: T.dark,
-    lineHeight: 20,
-  },
-  switchAuthMode: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  switchAuthText: {
-    fontSize: 14,
-    color: T.medium,
-  },
-  switchAuthLink: {
-    color: T.primary,
-    fontWeight: '600',
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 8,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: T.primary,
-    fontWeight: '600',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: T.border,
-  },
-  dividerText: {
-    paddingHorizontal: 16,
-    fontSize: 14,
-    color: T.medium,
-  },
-  socialLogins: {
-    gap: 12,
-  },
-  socialButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 99, 27, 0.3)',
-  },
-  facebookButton: {
-    borderColor: 'rgba(0, 86, 255, 0.3)',
-  },
-  socialIconContainer: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  socialIcon: {
-    width: 24,
-    height: 24,
-  },
-  facebookIcon: {
-    width: 28,
-    height: 28,
-  },
-  socialButtonText: {
-    color: '#ff631bff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  facebookButtonText: {
-    color: 'rgba(0, 86, 255, 1)',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  demoSection: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: T.bg,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  demoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: T.dark,
-    marginBottom: 8,
-  },
-  demoButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  demoButtonText: {
-    fontSize: 12,
-    color: T.primary,
-    fontWeight: '600',
-  },
-});
+/* ── Registration (Figure 9) ────────────────────────────────────── */
+export function Register() {
+  const { navigate } = useApp();
+  const [role, setRole] = useState<"owner" | "verifier">("owner");
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    confirm: "",
+    district: DEFAULT_LOCATION as string,
+    phone: "",
+    verifierRole: "Licensed Veterinarian" as VerifierRole,
+    clinic: "",
+    licenseNumber: "",
+  });
+  const [agree, setAgree] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [loading, setLoading] = useState(false);
 
-/* ── Forgot Password ──────────────────────────────────────────── */
-export function ForgotPassword() {
-  const { navigate, goBack, setLoading, isLoading } = useV3();
-  const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const set = (key: keyof typeof form, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
-  const validateEmail = (email: string) => {
-    const emailRule = FormValidator.email();
-    const requiredRule = FormValidator.required('Email is required');
-
-    let error = FormValidator.validateField(email, [requiredRule]);
-    if (!error) {
-      error = FormValidator.validateField(email, [emailRule]);
+  const validate = () => {
+    const e: Record<string, string | undefined> = {};
+    if (form.fullName.trim().length < 2) e.fullName = "Enter your full name";
+    if (!EMAIL_RE.test(form.email.trim())) e.email = "Enter a valid email address";
+    e.password = validatePassword(form.password);
+    if (form.confirm !== form.password) e.confirm = "Passwords do not match";
+    const digits = form.phone.replace(/\D/g, "");
+    if (digits.length < 10 || digits.length > 13) e.phone = "Enter a valid mobile number, e.g. 0917 123 4567";
+    if (role === "verifier") {
+      if (form.clinic.trim().length < 2) e.clinic = "Enter your clinic or kennel";
+      if (form.licenseNumber.trim().length < 3) e.licenseNumber = "Enter your PRC license or certification number";
     }
-
-    setEmailError(error || '');
-    return !error;
+    setErrors(e);
+    return Object.values(e).every((v) => !v);
   };
 
-  const handleSendResetLink = async () => {
-    if (!validateEmail(email)) {
+  const submit = async () => {
+    if (!validate()) return;
+    if (!agree) {
+      showMessage("Terms required", "Please agree to the Terms of Service and Privacy Policy.");
       return;
     }
-
-    setLoading('forgot-password', 'loading');
-
+    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      setLoading('forgot-password', 'success');
-      navigate("forgot-password-sent");
-    } catch (error) {
-      setLoading('forgot-password', 'error');
-      Alert.alert('Error', 'Failed to send reset link. Please try again.');
+      const { needsConfirmation } = await api.signUp({
+        email: form.email,
+        password: form.password,
+        fullName: form.fullName,
+        phone: form.phone,
+        location: districtLocation(form.district),
+        role,
+        verifierRole: form.verifierRole,
+        clinic: form.clinic,
+        licenseNumber: form.licenseNumber,
+      });
+      if (needsConfirmation) navigate("verify-email", { email: form.email.trim().toLowerCase() });
+      // Otherwise the new session signs the user in automatically.
+    } catch (e) {
+      showMessage("Registration failed", api.errorMessage(e));
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (isLoading('forgot-password')) {
-    return (
-      <View style={styles.container}>
-        <LoadingSpinner message="Sending reset link..." />
-      </View>
-    );
-  }
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <TouchableOpacity
-        onPress={goBack}
-        style={styles.backButton}
-      >
-        <Text style={[styles.backButtonText, { fontFamily: FONT }]}>← Back</Text>
-      </TouchableOpacity>
-
-      <View style={styles.authHeader}>
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: T.primaryLight,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 16,
-          }}
-        >
-          <PawPrint size={40} color={T.primary} />
-        </View>
-        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
-          Forgot Password?
-        </Text>
-        <Text style={[styles.authSubtitle, { fontFamily: FONT, textAlign: 'center', paddingHorizontal: 20 }]}>
-          No worries! Enter your email address and we'll send you a link to reset your password.
-        </Text>
-      </View>
-
-      <View style={styles.authForm}>
-        <Field
-          label="Email Address"
-          value={email}
-          onChange={setEmail}
-          onBlur={() => validateEmail(email)}
-          placeholder="Enter your email"
-          autoCapitalize="none"
-          error={emailError}
-        />
-
-        <Btn onClick={handleSendResetLink} size="large">
-          Send Reset Link
-        </Btn>
-
-        <TouchableOpacity
-          onPress={() => navigate("login")}
-          style={styles.switchAuthMode}
-        >
-          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
-            Remember your password? <Text style={styles.switchAuthLink}>Sign In</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  );
-}
-
-/* ── Forgot Password Sent ─────────────────────────────────────── */
-export function ForgotPasswordSent() {
-  const { navigate } = useV3();
-
-  return (
-    <View style={[styles.container, { padding: 20, justifyContent: 'center' }]}>
-      <View style={styles.authHeader}>
-        <View
-          style={{
-            width: 100,
-            height: 100,
-            borderRadius: 50,
-            backgroundColor: T.primaryLight,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 24,
-          }}
-        >
-          <View
+    <AuthLayout title="Join PawMatch" subtitle="Create your account to start matching">
+      <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>I am a</Text>
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 18 }}>
+        {(
+          [
+            { id: "owner", label: "Dog Owner", Icon: PawPrint },
+            { id: "verifier", label: "Vet / Breeder", Icon: Stethoscope },
+          ] as const
+        ).map(({ id, label, Icon }) => (
+          <TouchableOpacity
+            key={id}
+            onPress={() => setRole(id)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: role === id }}
             style={{
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-              backgroundColor: T.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
+              flex: 1,
+              alignItems: "center",
+              gap: 6,
+              paddingVertical: 14,
+              borderRadius: 14,
+              borderWidth: 2,
+              borderColor: role === id ? T.primary : T.border,
+              backgroundColor: role === id ? T.primaryLight : T.white,
             }}
           >
-            <Text style={{ fontSize: 32 }}>📧</Text>
-          </View>
-        </View>
-        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
-          Check Your Email
-        </Text>
-        <Text style={[styles.authSubtitle, { fontFamily: FONT, textAlign: 'center', paddingHorizontal: 20, lineHeight: 24 }]}>
-          We've sent a password reset link to your email address. Please check your inbox and follow the instructions to reset your password.
-        </Text>
+            <Icon size={22} color={role === id ? T.primary : T.medium} />
+            <Text style={{ fontFamily: FONT_BOLD, color: role === id ? T.primaryDark : T.medium }}>{label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <View style={{ gap: 16, marginTop: 32 }}>
-        <Btn onClick={() => navigate("login")} size="large">
-          Back to Sign In
-        </Btn>
+      <Field label="Full Name" value={form.fullName} onChangeText={(v) => set("fullName", v)} placeholder={role === "verifier" ? "e.g. Dr. Patricia Reyes" : "Enter your full name"} autoComplete="name" error={errors.fullName} />
+      <Field label="Email Address" value={form.email} onChangeText={(v) => set("email", v)} placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email" error={errors.email} />
+      <Field label="Password" value={form.password} onChangeText={(v) => set("password", v)} placeholder="Create a password" secure autoComplete="new-password" error={errors.password} hint="At least 8 characters with a letter and a number" />
+      <Field label="Confirm Password" value={form.confirm} onChangeText={(v) => set("confirm", v)} placeholder="Confirm your password" secure autoComplete="new-password" error={errors.confirm} />
 
-        <TouchableOpacity
-          onPress={() => navigate("forgot-password")}
+      <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Location</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {[DEFAULT_LOCATION, ...DAVAO_DISTRICTS].map((d) => (
+          <Chip key={d} label={d} active={form.district === d} onPress={() => set("district", d)} />
+        ))}
+      </View>
+
+      <Field label="Phone Number" value={form.phone} onChangeText={(v) => set("phone", v)} placeholder="0917 123 4567" keyboardType="phone-pad" autoComplete="tel" error={errors.phone} />
+
+      {role === "verifier" && (
+        <View style={{ backgroundColor: T.bg, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+          <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Professional role</Text>
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+            {(["Licensed Veterinarian", "Certified Breeder"] as const).map((r) => (
+              <Chip key={r} label={r} active={form.verifierRole === r} onPress={() => set("verifierRole", r)} />
+            ))}
+          </View>
+          <Field label="Clinic / Kennel" value={form.clinic} onChangeText={(v) => set("clinic", v)} placeholder="e.g. Davao Animal Clinic" error={errors.clinic} />
+          <Field label="License / Certification No." value={form.licenseNumber} onChangeText={(v) => set("licenseNumber", v)} placeholder="PRC license number" autoCapitalize="characters" error={errors.licenseNumber} />
+          <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, lineHeight: 18 }}>
+            Verifier accounts are reviewed by the PawMatch team before you can receive documents to verify.
+          </Text>
+        </View>
+      )}
+
+      <TouchableOpacity
+        onPress={() => setAgree((a) => !a)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: agree }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 10 }}
+      >
+        <View
           style={{
-            paddingVertical: 12,
-            alignItems: 'center',
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: agree ? T.primary : T.light,
+            backgroundColor: agree ? T.primary : T.white,
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
-          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
-            Didn't receive the email? <Text style={styles.switchAuthLink}>Resend</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
+          {agree && <Check size={14} color="#fff" strokeWidth={3} />}
+        </View>
+        <Text style={{ flex: 1, fontSize: 13, color: T.dark, fontFamily: FONT, lineHeight: 18 }}>
+          I agree to the Terms of Service and Privacy Policy, including the processing of my dogs' health records for
+          verification.
+        </Text>
+      </TouchableOpacity>
 
-      <View
-        style={{
-          marginTop: 40,
-          padding: 16,
-          backgroundColor: T.bg,
-          borderRadius: 12,
-          borderLeftWidth: 4,
-          borderLeftColor: T.primary,
-        }}
-      >
-        <Text style={{ fontSize: 14, color: T.dark, fontWeight: '600', marginBottom: 8 }}>
-          💡 Tip
-        </Text>
-        <Text style={{ fontSize: 12, color: T.medium, lineHeight: 18 }}>
-          If you don't see the email, check your spam or junk folder. The reset link will expire in 24 hours for security reasons.
-        </Text>
-      </View>
-    </View>
+      <Btn title="Create Account" size="large" loading={loading} onPress={submit} style={{ marginTop: 8 }} />
+      <TextLink prefix="Already have an account?" label="Sign In" onPress={() => navigate("login")} />
+    </AuthLayout>
   );
 }
 
-/* ── Reset Password ───────────────────────────────────────────── */
-export function ResetPassword() {
-  const { navigate, setLoading, isLoading } = useV3();
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+/* ── Confirm email with the emailed code ────────────────────────── */
+const RESEND_COOLDOWN_SECONDS = 60;
 
-  const validatePassword = (password: string) => {
-    const minLengthRule = FormValidator.minLength(8);
-    const requiredRule = FormValidator.required('Password is required');
+export function VerifyEmail() {
+  const { params, resetTo, showToast } = useApp();
+  const email: string = params.email ?? "";
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
-    let error = FormValidator.validateField(password, [requiredRule]);
-    if (!error) {
-      error = FormValidator.validateField(password, [minLengthRule]);
-    }
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
-    setPasswordError(error || '');
-    return !error;
-  };
-
-  const validateConfirmPassword = (confirmPassword: string, password: string) => {
-    const requiredRule = FormValidator.required('Please confirm your password');
-    
-    let error = FormValidator.validateField(confirmPassword, [requiredRule]);
-    if (!error && confirmPassword !== password) {
-      error = 'Passwords do not match';
-    }
-
-    setConfirmPasswordError(error || '');
-    return !error;
-  };
-
-  const handleResetPassword = async () => {
-    const isPasswordValid = validatePassword(password);
-    const isConfirmValid = validateConfirmPassword(confirmPassword, password);
-
-    if (!isPasswordValid || !isConfirmValid) {
+  const submit = async () => {
+    if (!/^\d{6,8}$/.test(code.trim())) {
+      setError("Enter the code from the email");
       return;
     }
-
-    setLoading('reset-password', 'loading');
-
+    setError(undefined);
+    setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      setLoading('reset-password', 'success');
-      Alert.alert(
-        'Success!',
-        'Your password has been reset successfully. You can now sign in with your new password.',
-        [
-          {
-            text: 'Sign In',
-            onPress: () => navigate('login'),
-          },
-        ]
-      );
-    } catch (error) {
-      setLoading('reset-password', 'error');
-      Alert.alert('Error', 'Failed to reset password. Please try again.');
+      await api.verifySignupCode(email, code);
+      showToast("Email confirmed", "Welcome to PawMatch!", "success");
+      // AppProvider moves the now signed-in user to their home screen.
+    } catch (e) {
+      setError(api.errorMessage(e));
+      setLoading(false);
     }
   };
 
-  if (isLoading('reset-password')) {
-    return (
-      <View style={styles.container}>
-        <LoadingSpinner message="Resetting your password..." />
-      </View>
-    );
-  }
+  const resend = async () => {
+    try {
+      await api.resendSignupCode(email);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+      showToast("Code sent", `Check ${email} (and the spam folder).`, "success");
+    } catch (e) {
+      showMessage("Couldn't resend", api.errorMessage(e));
+    }
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      <View style={styles.authHeader}>
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: T.primaryLight,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 16,
-          }}
-        >
-          <PawPrint size={40} color={T.primary} />
-        </View>
-        <Text style={[styles.authTitle, { fontFamily: FONT }]}>
-          Reset Password
+    <AuthLayout title="Confirm your email" subtitle={`Enter the code we emailed to ${email || "you"}.`} icon={Mail}>
+      <Field
+        label="Confirmation Code"
+        value={code}
+        onChangeText={(v) => setCode(v.replace(/\D/g, ""))}
+        placeholder="Code from the email"
+        keyboardType="number-pad"
+        maxLength={8}
+        autoComplete="one-time-code"
+        textContentType="oneTimeCode"
+        error={error}
+        onSubmitEditing={submit}
+      />
+      <Btn title="Confirm Email" size="large" loading={loading} onPress={submit} />
+      <Text style={{ fontSize: 13, color: T.medium, fontFamily: FONT, textAlign: "center", marginTop: 16, lineHeight: 19 }}>
+        Can&apos;t find it? Check your spam or promotions folder. The code expires after 1 hour.
+      </Text>
+      {cooldown > 0 ? (
+        <Text style={{ fontSize: 14, color: T.medium, fontFamily: FONT, textAlign: "center", paddingVertical: 14 }}>
+          Resend code in {cooldown}s
         </Text>
-        <Text style={[styles.authSubtitle, { fontFamily: FONT, textAlign: 'center', paddingHorizontal: 20 }]}>
-          Create a new password for your account. Make sure it's strong and secure.
-        </Text>
-      </View>
+      ) : (
+        <TextLink prefix="Didn't get the email?" label="Resend code" onPress={resend} />
+      )}
+      <TextLink label="Back to Sign In" onPress={() => resetTo("login")} />
+    </AuthLayout>
+  );
+}
 
-      <View style={styles.authForm}>
-        <View style={{ position: 'relative' }}>
-          <Field
-            label="New Password"
-            value={password}
-            onChange={setPassword}
-            onBlur={() => validatePassword(password)}
-            placeholder="Enter your new password"
-            secure={!showPassword}
-            error={passwordError}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.passwordToggle}
-          >
-            {showPassword ?
-              <EyeOff size={20} color={T.medium} /> :
-              <Eye size={20} color={T.medium} />
-            }
-          </TouchableOpacity>
-        </View>
+/* ── Forgot password ────────────────────────────────────────────── */
+export function ForgotPassword() {
+  const { navigate, goBack, params } = useApp();
+  const [email, setEmail] = useState<string>(params.email ?? "");
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(false);
 
-        <View style={{ position: 'relative' }}>
-          <Field
-            label="Confirm Password"
-            value={confirmPassword}
-            onChange={setConfirmPassword}
-            onBlur={() => validateConfirmPassword(confirmPassword, password)}
-            placeholder="Confirm your new password"
-            secure={!showConfirmPassword}
-            error={confirmPasswordError}
-          />
-          <TouchableOpacity
-            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-            style={styles.passwordToggle}
-          >
-            {showConfirmPassword ?
-              <EyeOff size={20} color={T.medium} /> :
-              <Eye size={20} color={T.medium} />
-            }
-          </TouchableOpacity>
-        </View>
+  const submit = async () => {
+    if (!EMAIL_RE.test(email.trim())) {
+      setError("Enter a valid email address");
+      return;
+    }
+    setError(undefined);
+    setLoading(true);
+    try {
+      await api.sendPasswordReset(email);
+      navigate("reset-password", { email: email.trim().toLowerCase() });
+    } catch (e) {
+      showMessage("Couldn't send the code", api.errorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        <View
-          style={{
-            padding: 12,
-            backgroundColor: T.primaryLight,
-            borderRadius: 8,
-            marginBottom: 8,
-          }}
-        >
-          <Text style={{ fontSize: 12, color: T.dark, fontWeight: '600', marginBottom: 4 }}>
-            Password Requirements:
-          </Text>
-          <Text style={{ fontSize: 11, color: T.medium, lineHeight: 16 }}>
-            • At least 8 characters long{'\n'}
-            • Mix of uppercase and lowercase letters{'\n'}
-            • Include numbers and special characters
-          </Text>
-        </View>
+  return (
+    <AuthLayout title="Forgot Password?" subtitle="Enter your email and we'll send you a reset code." icon={Mail}>
+      <Field label="Email Address" value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" error={error} />
+      <Btn title="Send Reset Code" size="large" loading={loading} onPress={submit} />
+      <TextLink prefix="Remember your password?" label="Sign In" onPress={goBack} />
+    </AuthLayout>
+  );
+}
 
-        <Btn onClick={handleResetPassword} size="large">
-          Reset Password
-        </Btn>
+/* ── Reset password with emailed code ───────────────────────────── */
+export function ResetPassword() {
+  const { params, refreshSession, resetTo, showToast } = useApp();
+  const email: string = params.email ?? "";
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
 
-        <TouchableOpacity
-          onPress={() => navigate("login")}
-          style={styles.switchAuthMode}
-        >
-          <Text style={[styles.switchAuthText, { fontFamily: FONT }]}>
-            Remember your password? <Text style={styles.switchAuthLink}>Sign In</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+  const submit = async () => {
+    const e: Record<string, string | undefined> = {};
+    if (!/^\d{6,8}$/.test(code.trim())) e.code = "Enter the code from the email";
+    e.password = validatePassword(password);
+    if (confirm !== password) e.confirm = "Passwords do not match";
+    setErrors(e);
+    if (Object.values(e).some(Boolean)) return;
+
+    setLoading(true);
+    try {
+      await api.resetPasswordWithCode(email, code, password);
+      const s = await refreshSession();
+      showToast("Password updated", "You're signed in with your new password.", "success");
+      resetTo(s ? homeScreenFor(s) : "login");
+    } catch (err) {
+      showMessage("Reset failed", api.errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resend = async () => {
+    setResending(true);
+    try {
+      await api.sendPasswordReset(email);
+      showToast("Code sent", `Check ${email} for a new code.`, "success");
+    } catch (e) {
+      showMessage("Couldn't resend", api.errorMessage(e));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  return (
+    <AuthLayout title="Reset Password" subtitle={`Enter the code we emailed to ${email || "you"} and choose a new password.`} icon={KeyRound}>
+      <Field label="Reset Code" value={code} onChangeText={setCode} placeholder="Code from the email" keyboardType="number-pad" maxLength={8} autoComplete="one-time-code" textContentType="oneTimeCode" error={errors.code} />
+      <Field label="New Password" value={password} onChangeText={setPassword} placeholder="Enter a new password" secure autoComplete="new-password" error={errors.password} hint="At least 8 characters with a letter and a number" />
+      <Field label="Confirm Password" value={confirm} onChangeText={setConfirm} placeholder="Confirm your new password" secure error={errors.confirm} />
+      <Btn title="Reset Password" size="large" loading={loading} onPress={submit} />
+      <TextLink prefix="Didn't get the email?" label={resending ? "Sending…" : "Resend code"} onPress={resend} />
+      <TextLink label="Back to Sign In" onPress={() => resetTo("login")} />
+    </AuthLayout>
   );
 }

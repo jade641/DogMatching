@@ -1,202 +1,113 @@
-import { ChevronRight, Eye, MapPin, Send, Sparkles } from "lucide-react-native";
-import { Image, Text, TouchableOpacity, View } from "react-native";
-import {
-  Btn,
-  FONT,
-  MOCK_DOGS,
-  ScoreBar,
-  T,
-  VeriBadge,
-} from "../contexts/AppContext";
+import { ChevronRight, Eye, Send, Sparkles } from "lucide-react-native";
+import { Text, TouchableOpacity, View } from "react-native";
+import { capitalize, FONT, FONT_BOLD, formatAge, shadow, T } from "../constants/theme";
+import type { RankedMatch } from "../types";
+import { OwnerLine, TemperamentTags, TrustIndicators } from "./DogWidgets";
+import { Btn, DogImage, ScoreBar, Tag, VeriBadge } from "./ui";
 
-export type RankedDog = {
-  dog: (typeof MOCK_DOGS)[number];
-  score: number;
-  reasons: string[];
-};
+function CriterionBar({ label, weight, score }: { label: string; weight: string; score: number }) {
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT }}>
+          {label} <Text style={{ color: T.medium }}>({weight})</Text>
+        </Text>
+        <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT_BOLD }}>{score}</Text>
+      </View>
+      <ScoreBar score={score} />
+    </View>
+  );
+}
 
-type FloatingMatchResultsProps = {
-  rankedDogs: RankedDog[];
-  selectedDogId: string | null;
-  onSelectDog: (dogId: string) => void;
-  onViewDog: (dog: RankedDog["dog"]) => void;
-  onRequestDog: (dog: RankedDog["dog"]) => void;
-  onContinueSelectedDog: (dog: RankedDog["dog"]) => void;
-};
+/** Per-criterion breakdown of the weighted sum (paper Tables 8–11). */
+export function CompatibilityBreakdownCard({ match }: { match: RankedMatch }) {
+  const c = match.compatibility;
+  return (
+    <View style={{ gap: 10 }}>
+      <CriterionBar label={`Breed · ${c.breed.level}`} weight="35%" score={c.breed.score} />
+      <CriterionBar label={`Age · ${c.age.difference} yr gap`} weight="25%" score={c.age.score} />
+      <CriterionBar label={`Sex · ${c.sex.opposite ? "opposite" : "same"}`} weight="15%" score={c.sex.score} />
+      <CriterionBar label={`Temperament · ${c.temperament.level}`} weight="25%" score={c.temperament.score} />
+    </View>
+  );
+}
 
 function FloatingMatchCard({
-  item,
+  match,
+  rank,
   selected,
   onSelect,
   onView,
   onRequest,
 }: {
-  item: RankedDog;
+  match: RankedMatch;
+  rank: number;
   selected: boolean;
   onSelect: () => void;
   onView: () => void;
   onRequest: () => void;
 }) {
-  const { dog, score, reasons } = item;
-
+  const { dog, compatibility, reasons } = match;
   return (
     <View
       style={{
-        borderRadius: 28,
+        borderRadius: 24,
         overflow: "hidden",
         backgroundColor: T.white,
         borderWidth: selected ? 2 : 1,
         borderColor: selected ? T.primary : T.border,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.12,
-        shadowRadius: 18,
-        elevation: 7,
+        ...shadow,
+        elevation: 5,
       }}
     >
-      <View style={{ position: "relative" }}>
-        <Image
-          source={{ uri: dog.images?.[0] }}
-          style={{ width: "100%", height: 200 }}
-          resizeMode="cover"
-        />
+      <View>
+        <DogImage uri={dog.img} width="100%" height={190} radius={0} />
         <View
           style={{
             position: "absolute",
-            left: 14,
-            top: 14,
+            left: 12,
+            top: 12,
             flexDirection: "row",
             alignItems: "center",
-            gap: 8,
+            gap: 6,
             paddingHorizontal: 10,
             paddingVertical: 6,
             borderRadius: 999,
-            backgroundColor: "rgba(255,255,255,0.94)",
+            backgroundColor: "rgba(255,255,255,0.95)",
           }}
         >
           <Sparkles size={14} color={T.primary} strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 12,
-              fontWeight: "800",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            {score}% match
+          <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT_BOLD }}>
+            #{rank} • {compatibility.total}% match
           </Text>
         </View>
-        <View style={{ position: "absolute", right: 14, top: 14 }}>
-          <VeriBadge tier={dog.verificationTier} />
+        <View style={{ position: "absolute", right: 12, top: 12 }}>
+          <VeriBadge tier={dog.tier} />
         </View>
       </View>
 
-      <View style={{ padding: 16, gap: 12 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 10,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "800",
-                color: T.dark,
-                fontFamily: FONT,
-              }}
-            >
-              {dog.name}
-            </Text>
-            <Text style={{ fontSize: 13, color: T.medium, marginTop: 2 }}>
-              {dog.breed} • {dog.color} • {dog.size}
-            </Text>
-          </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontSize: 12, color: T.medium }}>Owner</Text>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: T.dark }}>
-              {dog.owner.name.charAt(0)}
-            </Text>
-          </View>
+      <View style={{ padding: 16, gap: 10 }}>
+        <View>
+          <Text style={{ fontSize: 20, color: T.dark, fontFamily: FONT_BOLD }}>{dog.name}</Text>
+          <Text style={{ fontSize: 13, color: T.medium, marginTop: 2, fontFamily: FONT }}>
+            {dog.breed} • {formatAge(dog.age)} • {capitalize(dog.sex)} • {capitalize(dog.size)}
+          </Text>
         </View>
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {dog.temperament.map((temp) => (
-            <View
-              key={temp}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 999,
-                backgroundColor: T.bg,
-              }}
-            >
-              <Text style={{ fontSize: 12, color: T.dark }}>{temp}</Text>
-            </View>
+        <TemperamentTags traits={dog.temperament} />
+        <OwnerLine dog={dog} />
+        <ScoreBar score={compatibility.total} showLabel />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {reasons.map((r) => (
+            <Tag key={r} label={r} tone="brand" />
           ))}
         </View>
+        <TrustIndicators dog={dog} />
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              backgroundColor: T.teal,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
-              {dog.owner.name.charAt(0)}
-            </Text>
+        {selected && (
+          <View style={{ backgroundColor: T.bg, borderRadius: 14, padding: 12 }}>
+            <CompatibilityBreakdownCard match={match} />
           </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              flex: 1,
-            }}
-          >
-            <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.owner.name} •
-            </Text>
-            <MapPin size={10} color={T.medium} strokeWidth={2} />
-            <Text style={{ fontSize: 12, color: T.medium }}>
-              {dog.owner.location.split(",")[0]}
-            </Text>
-          </View>
-        </View>
-
-        <ScoreBar score={score} />
-
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {reasons.map((reason) => (
-            <View
-              key={reason}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 999,
-                backgroundColor: T.primaryLight,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: T.primaryDark,
-                  fontWeight: "600",
-                }}
-              >
-                {reason}
-              </Text>
-            </View>
-          ))}
-        </View>
+        )}
 
         <View style={{ flexDirection: "row", gap: 10 }}>
           <TouchableOpacity
@@ -209,29 +120,18 @@ function FloatingMatchCard({
               alignItems: "center",
               justifyContent: "center",
               flexDirection: "row",
-              gap: 8,
+              gap: 6,
             }}
           >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: "#fff",
-                fontFamily: FONT,
-              }}
-            >
-              {selected ? "Selected" : "Choose"}
-            </Text>
+            <Text style={{ fontSize: 14, color: "#fff", fontFamily: FONT_BOLD }}>{selected ? "Selected" : "Choose"}</Text>
             <ChevronRight size={16} color="#fff" strokeWidth={2} />
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={onView}
             style={{
               paddingHorizontal: 16,
               paddingVertical: 12,
               borderRadius: 14,
-              backgroundColor: T.white,
               borderWidth: 1.5,
               borderColor: T.primary,
               alignItems: "center",
@@ -241,34 +141,12 @@ function FloatingMatchCard({
             }}
           >
             <Eye size={14} color={T.primary} strokeWidth={2} />
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: T.primary,
-                fontFamily: FONT,
-              }}
-            >
-              View
-            </Text>
+            <Text style={{ fontSize: 14, color: T.primary, fontFamily: FONT_BOLD }}>View</Text>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          onPress={onRequest}
-          style={{
-            alignSelf: "flex-start",
-            paddingHorizontal: 6,
-            paddingTop: 2,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
+        <TouchableOpacity onPress={onRequest} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Send size={12} color={T.medium} strokeWidth={2} />
-          <Text style={{ fontSize: 12, fontWeight: "600", color: T.medium }}>
-            Send request to this match
-          </Text>
+          <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>Send request to this match</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -276,151 +154,61 @@ function FloatingMatchCard({
 }
 
 export function FloatingMatchResults({
-  rankedDogs,
+  matches,
+  forDogName,
   selectedDogId,
   onSelectDog,
   onViewDog,
   onRequestDog,
-  onContinueSelectedDog,
-}: FloatingMatchResultsProps) {
-  const selectedDog =
-    rankedDogs.find((item) => item.dog.id === selectedDogId) ??
-    rankedDogs[0] ??
-    null;
+}: {
+  matches: RankedMatch[];
+  forDogName: string;
+  selectedDogId: string | null;
+  onSelectDog: (dogId: string) => void;
+  onViewDog: (match: RankedMatch) => void;
+  onRequestDog: (match: RankedMatch) => void;
+}) {
+  const selected = matches.find((m) => m.dog.id === selectedDogId) ?? null;
 
   return (
-    <View style={{ gap: 12 }}>
-      <View
-        style={{
-          borderRadius: 24,
-          padding: 16,
-          backgroundColor: T.white,
-          borderWidth: 1,
-          borderColor: T.border,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
-          elevation: 3,
-        }}
-      >
+    <View style={{ gap: 14 }}>
+      <View style={{ borderRadius: 20, padding: 16, backgroundColor: T.white, borderWidth: 1, borderColor: T.border }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Sparkles size={16} color={T.primary} strokeWidth={2} />
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: "800",
-              color: T.dark,
-              fontFamily: FONT,
-            }}
-          >
-            Top 3 floating matches
+          <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD }}>
+            Top {matches.length} match{matches.length === 1 ? "" : "es"} for {forDogName}
           </Text>
         </View>
-        <Text
-          style={{
-            fontSize: 13,
-            color: T.medium,
-            marginTop: 6,
-            lineHeight: 18,
-          }}
-        >
-          These three dogs are your best matches based on the preferences you
-          entered.
+        <Text style={{ fontSize: 13, color: T.medium, marginTop: 6, lineHeight: 18, fontFamily: FONT }}>
+          Ranked by the compatibility score: breed 35%, age 25%, sex 15%, temperament 25%. Tap Choose to see the
+          breakdown.
         </Text>
       </View>
 
-      <View style={{ gap: 16 }}>
-        {rankedDogs.slice(0, 3).map((item, index) => {
-          const selected = item.dog.id === selectedDogId;
-          const rotation =
-            index === 0 ? "-2.5deg" : index === 1 ? "1deg" : "-0.75deg";
+      {matches.map((m, i) => (
+        <FloatingMatchCard
+          key={m.dog.id}
+          match={m}
+          rank={i + 1}
+          selected={m.dog.id === selectedDogId}
+          onSelect={() => onSelectDog(m.dog.id)}
+          onView={() => onViewDog(m)}
+          onRequest={() => onRequestDog(m)}
+        />
+      ))}
 
-          return (
-            <View
-              key={item.dog.id}
-              style={{
-                transform: [{ translateY: index * 6 }, { rotate: rotation }],
-                zIndex: rankedDogs.length - index,
-              }}
-            >
-              <View
-                style={{
-                  position: "absolute",
-                  left: 18,
-                  right: 18,
-                  bottom: -8,
-                  height: 16,
-                  borderRadius: 999,
-                  backgroundColor:
-                    index === 0
-                      ? "rgba(255, 110, 67, 0.18)"
-                      : index === 1
-                        ? "rgba(45, 212, 191, 0.16)"
-                        : "rgba(251, 191, 36, 0.16)",
-                  opacity: 0.9,
-                }}
-              />
-              <FloatingMatchCard
-                item={item}
-                selected={selected}
-                onSelect={() => onSelectDog(item.dog.id)}
-                onView={() => onViewDog(item.dog)}
-                onRequest={() => onRequestDog(item.dog)}
-              />
+      {selected && (
+        <View style={{ borderRadius: 20, padding: 16, backgroundColor: T.white, borderWidth: 1, borderColor: T.border, gap: 10 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View>
+              <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT }}>Selected dog</Text>
+              <Text style={{ fontSize: 18, color: T.dark, fontFamily: FONT_BOLD }}>{selected.dog.name}</Text>
             </View>
-          );
-        })}
-      </View>
-
-      {selectedDog && (
-        <View
-          style={{
-            borderRadius: 24,
-            padding: 16,
-            backgroundColor: T.white,
-            borderWidth: 1,
-            borderColor: T.border,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.08,
-            shadowRadius: 12,
-            elevation: 3,
-            gap: 10,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              gap: 12,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, color: T.medium }}>
-                Selected dog
-              </Text>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "800",
-                  color: T.dark,
-                  fontFamily: FONT,
-                }}
-              >
-                {selectedDog.dog.name}
-              </Text>
-            </View>
-            <Text
-              style={{ fontSize: 12, fontWeight: "700", color: T.primaryDark }}
-            >
-              {selectedDog.score}% match
+            <Text style={{ fontSize: 13, color: T.primaryDark, fontFamily: FONT_BOLD }}>
+              {selected.compatibility.total}% match
             </Text>
           </View>
-
-          <Btn onClick={() => onContinueSelectedDog(selectedDog.dog)}>
-            Continue with selected dog
-          </Btn>
+          <Btn title="Continue with selected dog" onPress={() => onRequestDog(selected)} />
         </View>
       )}
     </View>

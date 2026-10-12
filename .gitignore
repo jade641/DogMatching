@@ -30,8 +30,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files (.env.seed holds the service-role key — never commit it)
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo

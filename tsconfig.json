@@ -16,8 +16,7 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "strict": true,
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": [
         "./*"
@@ -55,7 +54,8 @@
     "expo-env.d.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "supabase/functions/compatibility"
   ],
   "extends": "expo/tsconfig.base"
 }

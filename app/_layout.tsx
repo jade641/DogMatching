@@ -1,50 +1,35 @@
-import {
-  Roboto_400Regular,
-  Roboto_500Medium,
-  Roboto_700Bold,
-  useFonts,
-} from "@expo-google-fonts/roboto";
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
+import { Roboto_400Regular, Roboto_500Medium, Roboto_700Bold, useFonts } from "@expo-google-fonts/roboto";
+import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "../contexts/AppContext";
 
-// Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [fontsLoaded] = useFonts({
-    Roboto_400Regular,
-    Roboto_500Medium,
-    Roboto_700Bold,
-  });
+  const [fontsLoaded, fontError] = useFonts({ Roboto_400Regular, Roboto_500Medium, Roboto_700Bold });
+  const ready = fontsLoaded || !!fontError;
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!ready) return null;
 
   return (
-    <AppProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AppProvider>
+    <SafeAreaProvider>
+      <AppProvider>
+        <ThemeProvider value={DefaultTheme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="auth-callback" />
+          </Stack>
+          <StatusBar style="dark" />
+        </ThemeProvider>
+      </AppProvider>
+    </SafeAreaProvider>
   );
 }

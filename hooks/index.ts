@@ -1,1 +1,1 @@
-// Placeholder hooks index\n
+export { useAsync } from "./useAsync";
