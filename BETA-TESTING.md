@@ -88,8 +88,22 @@ exists.*
 
 ### *6. Approve veterinarians and breeders*
 
-*Vets and breeders register in the app by choosing **Vet / Breeder**. They see "Account pending approval" until you
-check their PRC license or certification:*
+*Vets and breeders register in the app by choosing **Vet / Breeder**. They see "Account pending approval" until an
+admin checks their PRC license or certification. A dog owner who is also a vet or breeder signs up as **Vet / Breeder**
+with the same email and password: the professional profile is added to their existing account, and they switch sides
+from **Records → Switch to Vet / Breeder** or **Profile → Switch to Dog Owner**. They can't verify their own dogs.*
+
+*Make your own account an admin once (sign out and back in afterwards):*
+
+```bash
+npm run admin:grant -- you@example.com
+```
+
+*Admins get an **Admin** tab and an alert for every new application. Open an application to approve it, or reject it
+with remarks the applicant will see. A rejected applicant re-submits by correcting their license number, and an approved
+verifier who changes their license number goes back to the queue. Admins can't review their own application.*
+
+*The command-line route still works:*
 
 ```bash
 npm run verifier:list                          # who is waiting, with license numbers and phones

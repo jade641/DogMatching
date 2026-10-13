@@ -49,9 +49,33 @@ export interface VerifierProfile {
   rating: number;
   available: boolean;
   approved: boolean;
+  /** Set when an admin approved or rejected the application; null while pending. */
+  reviewed_at: string | null;
+  review_notes: string | null;
   avatar: string | null;
   created_at: string;
 }
+
+/** A verifier account as seen by admins (admin_list_verifiers). */
+export interface VerifierApplication {
+  id: string;
+  user_id: string;
+  name: string;
+  role: VerifierRole;
+  clinic: string;
+  license_number: string;
+  approved: boolean;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  reviewer_name: string | null;
+  created_at: string;
+  email: string;
+  phone: string | null;
+  location: string;
+  documents_reviewed: number;
+}
+
+export type ApplicationStatus = "pending" | "approved" | "rejected";
 
 export interface Dog {
   id: string;
@@ -151,6 +175,8 @@ export type NotificationType =
   | "verification_result"
   | "review"
   | "match_alert"
+  | "verifier_application"
+  | "verifier_review"
   | "system";
 
 export interface AppNotification {
@@ -221,4 +247,6 @@ export type Screen =
   | "vet-request-detail"
   | "vet-records"
   | "vet-profile"
-  | "vet-settings";
+  | "vet-settings"
+  | "admin-verifiers"
+  | "admin-verifier-detail";

@@ -63,5 +63,6 @@ All business rules live in the database, so a modified client cannot bypass them
 | `npm run test:db` | Applies the migration to an embedded Postgres and checks row-level security and workflows |
 | `npm run seed:demo` | Creates demo owners, dogs and an approved vet (needs `.env.seed`) |
 | `npm run verifier:list` / `npm run verifier:approve -- email` | Review and approve vet/breeder sign-ups |
+| `npm run admin:grant -- email` / `npm run admin:revoke -- email` | Give an account the in-app Admin tab for reviewing vet/breeder applications |
 | `npm run functions:deploy` | Deploy the `compatibility` Edge Function (Supabase CLI) |
 | `npm run build:apk` | Build an installable Android APK with EAS |

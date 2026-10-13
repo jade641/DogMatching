@@ -292,6 +292,103 @@ await step("verifiers: unapproved hidden, can't self-approve", async () => {
   assert.equal(rows[0].clinic, "New Clinic");
 });
 
+const ADM = await signUp("admin@test.ph", { full_name: "PawMatch Admin" });
+await su("update public.users set role = 'admin' where id = $1", [ADM]);
+const appId = async (uid) => (await su("select id from public.verifiers where user_id = $1", [uid]))[0].id;
+
+await step("admin: only admins can list or review applications; no self-promotion", async () => {
+  await asFails(A, "select * from public.admin_list_verifiers()", [], /Only PawMatch administrators/);
+  await asFails(V, "select public.admin_review_verifier($1, 'approve')", [await appId(W)], /Only PawMatch administrators/);
+  await asFails(A, "update public.users set role = 'admin' where id = $1", [A], /permission denied/);
+  assert.equal((await as(ADM, "select public.is_admin() as ok"))[0].ok, true);
+  assert.equal((await as(A, "select public.is_admin() as ok"))[0].ok, false);
+});
+
+let Y, yApp;
+await step("admin: new application alerts admins and lists contact details", async () => {
+  Y = await signUp("newvet@test.ph", { full_name: "Dr. Ana Lim", role: "verifier", verifier_role: "Certified Breeder", clinic: "Lim Kennels", license_number: "PCCI-77", phone: "0918" });
+  yApp = await appId(Y);
+  const notes = await as(ADM, "select type, title, data from public.notifications where type = 'verifier_application'");
+  assert.equal(notes.length, 1);
+  assert.equal(notes[0].title, "New certified breeder application");
+  assert.equal(notes[0].data.verifier_id, yApp);
+  const [row] = (await as(ADM, "select * from public.admin_list_verifiers()")).filter((r) => r.id === yApp);
+  assert.equal(row.email, "newvet@test.ph");
+  assert.equal(row.phone, "0918");
+  assert.equal(row.approved, false);
+  assert.equal(row.reviewed_at, null);
+});
+
+await step("admin: reject needs remarks, notifies applicant; verifier can't edit review fields", async () => {
+  await asFails(ADM, "select public.admin_review_verifier($1, 'reject', ' ')", [yApp], /remarks/);
+  await as(ADM, "select public.admin_review_verifier($1, 'reject', 'License number not found in PCCI registry')", [yApp]);
+  const [own] = await as(Y, "select approved, reviewed_at, review_notes from public.verifiers where user_id = $1", [Y]);
+  assert.equal(own.approved, false);
+  assert.ok(own.reviewed_at);
+  assert.equal(own.review_notes, "License number not found in PCCI registry");
+  const [n] = await as(Y, "select title, body from public.notifications where type = 'verifier_review'");
+  assert.equal(n.title, "Your application was not approved");
+  await asFails(ADM, "select public.admin_review_verifier($1, 'reject', 'again')", [yApp], /already been rejected/);
+  await asFails(Y, "update public.verifiers set review_notes = null, reviewed_at = null where user_id = $1", [Y], /permission denied/);
+});
+
+await step("admin: correcting the license re-submits the application", async () => {
+  await as(Y, "update public.verifiers set license_number = 'PCCI-0077' where user_id = $1", [Y]);
+  const [own] = await su("select approved, reviewed_at, review_notes from public.verifiers where id = $1", [yApp]);
+  assert.equal(own.reviewed_at, null);
+  assert.equal(own.review_notes, null);
+  const titles = (await as(ADM, "select title from public.notifications where type = 'verifier_application' order by id")).map((r) => r.title);
+  assert.deepEqual(titles, ["New certified breeder application", "Updated certified breeder application"]);
+  await as(Y, "update public.verifiers set available = false where user_id = $1", [Y]);
+  assert.equal((await as(ADM, "select id from public.notifications where type = 'verifier_application'")).length, 2);
+});
+
+await step("admin: approval lists the verifier for owners and notifies them", async () => {
+  await as(ADM, "select public.admin_review_verifier($1, 'approve')", [yApp]);
+  assert.ok((await as(A, "select user_id from public.verifiers")).some((v) => v.user_id === Y));
+  const titles = (await as(Y, "select title from public.notifications where type = 'verifier_review' order by id")).map((r) => r.title);
+  assert.deepEqual(titles, ["Your application was not approved", "Your account is approved"]);
+  const [row] = (await as(ADM, "select * from public.admin_list_verifiers()")).filter((r) => r.id === yApp);
+  assert.equal(row.reviewer_name, "PawMatch Admin");
+  await asFails(ADM, "select public.admin_review_verifier($1, 'approve')", [yApp], /already approved/);
+});
+
+await step("admin: changing an approved license or revoking returns the account to unapproved", async () => {
+  await as(Y, "update public.verifiers set license_number = 'OTHER-1' where user_id = $1", [Y]);
+  assert.equal((await su("select approved from public.verifiers where id = $1", [yApp]))[0].approved, false);
+  await as(ADM, "select public.admin_review_verifier($1, 'approve')", [yApp]);
+  await as(ADM, "select public.admin_review_verifier($1, 'reject', 'Complaint from owners')", [yApp]);
+  assert.equal((await su("select approved from public.verifiers where id = $1", [yApp]))[0].approved, false);
+  const [n] = await as(Y, "select title from public.notifications where type = 'verifier_review' order by id desc limit 1");
+  assert.equal(n.title, "Your verifier approval was revoked");
+});
+
+await step("admin: cannot review own application", async () => {
+  await su("update public.users set role = 'admin' where id = $1", [W]);
+  await asFails(W, "select public.admin_review_verifier($1, 'approve')", [await appId(W)], /your own application/);
+  await su("update public.users set role = 'verifier' where id = $1", [W]);
+});
+
+await step("owner adds a vet profile to the same account: pending, admins alerted, once only", async () => {
+  const before = (await as(ADM, "select id from public.notifications where type = 'verifier_application'")).length;
+  await asFails(B, "select public.add_verifier_profile('Licensed Veterinarian', 'Santos Vet', ' ')", [], /license/);
+  const [v] = await as(B, "select * from public.add_verifier_profile('Licensed Veterinarian', 'Santos Vet', 'PRC-555')");
+  assert.equal(v.user_id, B);
+  assert.equal(v.name, "Maria Santos");
+  assert.equal(v.approved, false);
+  assert.equal((await su("select id from public.owners where user_id = $1", [B])).length, 1, "owner profile kept");
+  assert.equal((await as(ADM, "select id from public.notifications where type = 'verifier_application'")).length, before + 1);
+  await asFails(B, "select public.add_verifier_profile('Licensed Veterinarian', 'Santos Vet', 'PRC-555')", [], /already has a vet/);
+  await asFails(V, "select public.add_verifier_profile('Licensed Veterinarian', 'X Clinic', 'PRC-1')", [], /already has a vet/);
+});
+
+await step("dual-role account can't verify its own dog", async () => {
+  await as(ADM, "select public.admin_review_verifier($1, 'approve')", [await appId(B)]);
+  await as(B, "insert into storage.objects (bucket_id, name) values ('documents', $1)", [`${B}/vaccination-9.jpg`]);
+  await asFails(B, `insert into public.verifier_submissions (dog_id, verifier_user_id, submission_type, document_url)
+    values ($1, $2, 'vaccination', $3)`, [bellaId, B, `${B}/vaccination-9.jpg`], /own dog/);
+});
+
 await step("profile: update_my_profile syncs owners", async () => {
   await as(A, "select public.update_my_profile('Juan D. Cruz', '0917', 'Buhangin, Davao City')");
   const [o] = await su("select display_name, location from public.owners where user_id=$1", [A]);

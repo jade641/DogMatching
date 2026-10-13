@@ -31,9 +31,17 @@ export interface Toast {
 /** Screens a signed-in user is moved away from automatically after sign-in. */
 const SIGNED_OUT_SCREENS: Screen[] = ["boot", "setup-required", "landing", "login", "register", "forgot-password", "verify-email"];
 const LANDING_SEEN_KEY = "pawmatch.landingSeen";
+const PORTAL_KEY = "pawmatch.portal";
 
-export function homeScreenFor(session: Session): Screen {
-  return session.verifier && !session.owner ? "vet-dashboard" : "home";
+/** Which side of the app an account with both an owner and a vet / breeder profile is using. */
+export type Portal = "owner" | "vet";
+
+export function isVetPortal(session: Session, portal: Portal) {
+  return !!session.verifier && (!session.owner || portal === "vet");
+}
+
+export function homeScreenFor(session: Session, portal: Portal = "owner"): Screen {
+  return isVetPortal(session, portal) ? "vet-dashboard" : "home";
 }
 
 interface AppContextValue {
@@ -51,6 +59,10 @@ interface AppContextValue {
   refreshSession: () => Promise<Session | null>;
   signOut: () => Promise<void>;
   markLandingSeen: () => void;
+
+  portal: Portal;
+  /** Switches between the owner and vet sides and opens that side's home screen. */
+  switchPortal: (portal: Portal) => void;
 
   myDogs: Dog[];
   dogsLoaded: boolean;
@@ -82,10 +94,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [lastNotification, setLastNotification] = useState<AppNotification | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [portal, setPortal] = useState<Portal>("owner");
 
   const route = stack[stack.length - 1];
   const screenRef = useRef<Screen>(route.screen);
   const sessionUidRef = useRef<string | null>(null);
+  const portalRef = useRef<Portal>("owner");
+  const sessionLoadId = useRef(0);
 
   useEffect(() => {
     screenRef.current = route.screen;
@@ -122,8 +137,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return dogs;
   }, []);
 
+  const choosePortal = useCallback((p: Portal) => {
+    portalRef.current = p;
+    setPortal(p);
+    AsyncStorage.setItem(PORTAL_KEY, p).catch(() => undefined);
+  }, []);
+
   const loadSession = useCallback(async () => {
+    const id = ++sessionLoadId.current;
     const s = await api.fetchSession();
+    // A newer load (e.g. right after adding a vet profile) wins over a slower, older one.
+    if (id !== sessionLoadId.current) return s;
     sessionUidRef.current = s?.user.id ?? null;
     setSession(s);
     if (s?.owner) {
@@ -153,9 +177,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBootError(null);
     resetTo("boot");
     try {
+      const saved = await AsyncStorage.getItem(PORTAL_KEY).catch(() => null);
+      if (saved === "vet" || saved === "owner") choosePortal(saved);
       const s = await loadSession();
       if (s) {
-        resetTo(homeScreenFor(s));
+        resetTo(homeScreenFor(s, portalRef.current));
       } else {
         // Always open on the landing carousel when signed out.
         resetTo("landing");
@@ -163,7 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setBootError(api.errorMessage(e));
     }
-  }, [loadSession, resetTo]);
+  }, [loadSession, resetTo, choosePortal]);
 
   useEffect(() => {
     boot();
@@ -177,7 +203,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTimeout(async () => {
           try {
             const s = await loadSession();
-            if (s && SIGNED_OUT_SCREENS.includes(screenRef.current)) resetTo(homeScreenFor(s));
+            if (s && SIGNED_OUT_SCREENS.includes(screenRef.current)) resetTo(homeScreenFor(s, portalRef.current));
           } catch (e) {
             showToast("Couldn't load your profile", api.errorMessage(e), "error");
           }
@@ -213,6 +239,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(LANDING_SEEN_KEY, "1").catch(() => undefined);
   }, []);
 
+  const switchPortal = useCallback(
+    (p: Portal) => {
+      choosePortal(p);
+      resetTo(p === "vet" ? "vet-dashboard" : "home");
+    },
+    [choosePortal, resetTo],
+  );
+
   /* ── Notifications (Supabase Realtime) ───────────────────────── */
   const reloadNotifications = useCallback(async () => {
     try {
@@ -231,8 +265,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLastNotification(n);
       setToast({ id: Date.now(), title: n.title, message: n.body, tone: "info", notification: n });
       if (n.type === "verification_result") reloadDogs().catch(() => undefined);
+      if (n.type === "verifier_review") loadSession().catch(() => undefined);
     });
-  }, [userId, reloadNotifications, reloadDogs]);
+  }, [userId, reloadNotifications, reloadDogs, loadSession]);
 
   const markAllRead = useCallback(async () => {
     setNotifications((list) => list.map((n) => ({ ...n, read: true })));
@@ -246,6 +281,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.markNotificationsRead([n.id]).catch(() => undefined);
       }
       const d = n.data ?? {};
+      // Accounts with both profiles: open the alert on the side of the app it belongs to.
+      if (n.type === "verification_request" || n.type === "verifier_review") choosePortal("vet");
+      else if (n.type !== "system" && n.type !== "verifier_application") choosePortal("owner");
       switch (n.type) {
         case "match_request":
         case "request_update":
@@ -261,6 +299,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         case "verification_result":
           navigate("verify-status", { dogId: d.dog_id });
           break;
+        case "verifier_application":
+          if (d.verifier_id) navigate("admin-verifier-detail", { verifierId: d.verifier_id });
+          break;
+        case "verifier_review":
+          navigate("vet-profile");
+          break;
         case "match_alert":
           if (d.for_dog_id) setActiveDogId(d.for_dog_id);
           if (d.dog_id) navigate("match-profile", { dogId: d.dog_id });
@@ -269,7 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           navigate("notifications");
       }
     },
-    [navigate],
+    [navigate, choosePortal],
   );
 
   const activeDog = useMemo(
@@ -291,6 +335,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshSession,
     signOut,
     markLandingSeen,
+    portal,
+    switchPortal,
     myDogs,
     dogsLoaded,
     reloadDogs,

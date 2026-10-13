@@ -22,9 +22,11 @@ import {
   Phone,
   Scale,
   Shield,
+  ShieldCheck,
   Star,
   Stethoscope,
   User,
+  UserCheck,
   XCircle,
 } from "lucide-react-native";
 import { type ComponentType, useState } from "react";
@@ -42,7 +44,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   DAVAO_DISTRICTS,
   DEFAULT_LOCATION,
@@ -286,6 +288,8 @@ const NOTIFICATION_ICONS: Record<NotificationType, ComponentType<any>> = {
   verification_result: Shield,
   review: Star,
   match_alert: PawPrint,
+  verifier_application: UserCheck,
+  verifier_review: ShieldCheck,
   system: Info,
 };
 
@@ -449,15 +453,7 @@ export function EditProfileScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         {/* Hero header */}
         <View style={{ paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 76, paddingHorizontal: 20, overflow: "hidden", borderBottomLeftRadius: 28, borderBottomRightRadius: 28 }}>
-          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id="editProfileBg" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
-                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#editProfileBg)" />
-          </Svg>
+          <LinearGradient colors={[T.primary, T.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
           <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
           <PawPrint size={22} color="#fff" style={{ position: "absolute", bottom: 36, left: 36, opacity: 0.18, transform: [{ rotate: "-20deg" }] }} />
           <PawPrint size={18} color="#fff" style={{ position: "absolute", bottom: 52, right: 48, opacity: 0.18, transform: [{ rotate: "20deg" }] }} />

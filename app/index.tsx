@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdminVerifierDetail, AdminVerifiers } from "../components/Admin";
 import { BootScreen, ForgotPassword, Landing, Login, Register, ResetPassword, SetupRequired, VerifyEmail } from "../components/Auth";
 import {
   ChangePasswordScreen,
@@ -13,7 +14,7 @@ import { AddDog, DogProfile, EditDog, MatchProfileScreen, OwnerProfile, SendRequ
 import { Loading } from "../components/ui";
 import { AuditTrailScreen, VerifyChoose, VerifyStatus, VerifyUpload } from "../components/Verify";
 import { VetDashboard, VetProfile, VetRequestDetail, VetRequests, VetRecords, VetSettings } from "../components/Veterinarian";
-import { useApp } from "../contexts/AppContext";
+import { isVetPortal, useApp } from "../contexts/AppContext";
 import { Shell } from "../navigation/Shell";
 import type { Screen } from "../types";
 
@@ -55,6 +56,11 @@ const VET_SCREENS: Partial<Record<Screen, () => ReactNode>> = {
   "vet-settings": () => <VetSettings />,
 };
 
+const ADMIN_SCREENS: Partial<Record<Screen, () => ReactNode>> = {
+  "admin-verifiers": () => <AdminVerifiers />,
+  "admin-verifier-detail": () => <AdminVerifierDetail />,
+};
+
 const SHARED_SCREENS: Partial<Record<Screen, () => ReactNode>> = {
   notifications: () => <NotificationsScreen />,
   settings: () => <SettingsScreen />,
@@ -64,7 +70,7 @@ const SHARED_SCREENS: Partial<Record<Screen, () => ReactNode>> = {
 };
 
 function PageRenderer() {
-  const { screen, params, session } = useApp();
+  const { screen, params, session, portal } = useApp();
 
   const publicPage = PUBLIC_SCREENS[screen];
   if (publicPage) return <>{publicPage()}</>;
@@ -74,10 +80,14 @@ function PageRenderer() {
 
   const isOwner = !!session.owner;
   const isVerifier = !!session.verifier;
+  const isAdmin = session.user.role === "admin";
   const page =
-    SHARED_SCREENS[screen] ?? (isOwner ? OWNER_SCREENS[screen] : undefined) ?? (isVerifier ? VET_SCREENS[screen] : undefined);
+    SHARED_SCREENS[screen] ??
+    (isOwner ? OWNER_SCREENS[screen] : undefined) ??
+    (isVerifier ? VET_SCREENS[screen] : undefined) ??
+    (isAdmin ? ADMIN_SCREENS[screen] : undefined);
 
-  if (!page) return isVerifier && !isOwner ? <VetDashboard /> : <HomeScreen />;
+  if (!page) return isVetPortal(session, portal) ? <VetDashboard /> : <HomeScreen />;
   // Remount screens when their params change so data reloads.
   return <PageKey key={`${screen}:${JSON.stringify(params)}`}>{page()}</PageKey>;
 }

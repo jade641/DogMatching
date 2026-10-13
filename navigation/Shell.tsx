@@ -7,6 +7,7 @@ import {
   Home,
   LayoutDashboard,
   Shield,
+  ShieldCheck,
   Star,
   Stethoscope,
   X,
@@ -15,7 +16,7 @@ import { type ComponentType, type ReactNode, useEffect, useRef } from "react";
 import { Animated, BackHandler, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FONT, FONT_BOLD, FONT_MEDIUM, T } from "../constants/theme";
-import { useApp } from "../contexts/AppContext";
+import { isVetPortal, useApp } from "../contexts/AppContext";
 import type { Screen } from "../types";
 
 type Tab = { icon: ComponentType<any>; label: string; screens: Screen[] };
@@ -42,6 +43,9 @@ const VET_TABS: Tab[] = [
   { icon: FileCheck, label: "Records", screens: ["vet-records"] },
   { icon: Stethoscope, label: "Profile", screens: ["vet-profile", "vet-settings", "edit-profile", "change-password"] },
 ];
+
+/** Appended to the owner or vet tabs for administrators. */
+const ADMIN_TAB: Tab = { icon: ShieldCheck, label: "Admin", screens: ["admin-verifiers", "admin-verifier-detail"] };
 
 /** Full-screen pages without the tab bar. */
 const NO_NAV: Screen[] = [
@@ -145,7 +149,7 @@ function ToastBanner() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { screen, session, canGoBack, goBack } = useApp();
+  const { screen, session, portal, canGoBack, goBack } = useApp();
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -158,13 +162,14 @@ export function Shell({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [canGoBack, goBack]);
 
-  const isVet = !!session?.verifier && !session?.owner;
+  const isVet = !!session && isVetPortal(session, portal);
   const showNav = !!session && !NO_NAV.includes(screen);
+  const tabs = isVet ? VET_TABS : OWNER_TABS;
 
   return (
     <View style={styles.shell}>
       <View style={styles.content}>{children}</View>
-      {showNav && <BottomNav tabs={isVet ? VET_TABS : OWNER_TABS} />}
+      {showNav && <BottomNav tabs={session.user.role === "admin" ? [...tabs, ADMIN_TAB] : tabs} />}
       <ToastBanner />
     </View>
   );

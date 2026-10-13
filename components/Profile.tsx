@@ -38,7 +38,7 @@ import { useMemo, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   capitalize,
   DOC_TYPES,
@@ -539,15 +539,7 @@ function DogForm({ existing }: { existing?: Dog }) {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         {/* Hero header */}
         <View style={{ paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 84, paddingHorizontal: 20, overflow: "hidden", borderBottomLeftRadius: 28, borderBottomRightRadius: 28 }}>
-          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id="dogFormBg" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
-                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#dogFormBg)" />
-          </Svg>
+          <LinearGradient colors={[T.primary, T.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
           <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
           <PawPrint size={22} color="#fff" style={{ position: "absolute", bottom: 40, left: 36, opacity: 0.18, transform: [{ rotate: "-20deg" }] }} />
           <PawPrint size={18} color="#fff" style={{ position: "absolute", bottom: 60, right: 50, opacity: 0.18, transform: [{ rotate: "20deg" }] }} />
@@ -813,7 +805,7 @@ export function EditDog() {
 
 /* ── Owner profile (Figure 14) ──────────────────────────────────── */
 export function OwnerProfile() {
-  const { navigate, goBack, canGoBack, myDogs, signOut } = useApp();
+  const { navigate, goBack, canGoBack, myDogs, signOut, switchPortal } = useApp();
   const session = useSession();
   const owner = session.owner;
   const memberSince = formatDate(session.user.created_at, { day: undefined });
@@ -899,6 +891,20 @@ export function OwnerProfile() {
           </Text>
           <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD, marginTop: 8 }}>View Full Reputation →</Text>
         </Card>
+
+        {session.verifier && (
+          <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+            <View style={{ borderRadius: 16, overflow: "hidden" }}>
+              <ListItem
+                icon={Stethoscope}
+                title="Switch to Vet / Breeder"
+                subtitle={session.verifier.approved ? "Review documents sent to you" : "Your application is waiting for approval"}
+                onPress={() => switchPortal("vet")}
+                last
+              />
+            </View>
+          </View>
+        )}
 
         <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
           <SectionTitle title="Settings" icon={Settings} />

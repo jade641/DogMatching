@@ -41,7 +41,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   DAVAO_DISTRICTS,
   DEFAULT_LOCATION,
@@ -347,15 +347,10 @@ export function Landing() {
   return (
     <View style={{ flex: 1, backgroundColor: T.white }}>
       {/* Soft tinted backdrop that blends into white */}
-      <Svg style={{ position: "absolute", top: 0, left: 0 }} width={width} height="70%">
-        <Defs>
-          <LinearGradient id="landingBg" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={LANDING_PAGES[page].tint} stopOpacity="1" />
-            <Stop offset="1" stopColor={T.white} stopOpacity="1" />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#landingBg)" />
-      </Svg>
+      <LinearGradient
+        colors={[LANDING_PAGES[page].tint, T.white]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: "70%" }}
+      />
 
       <View
         style={{
@@ -461,15 +456,7 @@ function AuthShell({ title, subtitle, onBack, children, footer }: {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom, 16) + 16 }}>
         {/* Hero header */}
         <View style={{ paddingTop: top + (onBack ? 12 : 28), paddingBottom: 72, paddingHorizontal: 24, overflow: "hidden" }}>
-          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id="authBg" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
-                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#authBg)" />
-          </Svg>
+          <LinearGradient colors={[T.primary, T.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
           <View style={{ position: "absolute", width: 220, height: 220, borderRadius: 110, backgroundColor: "rgba(255,255,255,0.08)", top: -70, right: -60 }} />
           <View style={{ position: "absolute", width: 140, height: 140, borderRadius: 70, backgroundColor: "rgba(255,255,255,0.07)", bottom: -40, left: -40 }} />
           <PawPrint size={26} color="#fff" style={{ position: "absolute", top: top + 40, right: 34, opacity: 0.25, transform: [{ rotate: "20deg" }] }} />
@@ -860,7 +847,7 @@ export function Login() {
 
 /* ── Registration (Figure 9) ────────────────────────────────────── */
 export function Register() {
-  const { navigate } = useApp();
+  const { navigate, refreshSession, switchPortal, showToast } = useApp();
   const [role, setRole] = useState<"owner" | "verifier">("owner");
   const [form, setForm] = useState({
     fullName: "",
@@ -898,6 +885,36 @@ export function Register() {
     return Object.values(e).every((v) => !v);
   };
 
+  /**
+   * One login per email: a dog owner who is also a vet / breeder adds the professional
+   * profile to their existing account, proving it's theirs with that account's password.
+   */
+  const addToExistingAccount = async () => {
+    try {
+      await api.signIn(form.email, form.password);
+    } catch (e) {
+      if (api.isEmailNotConfirmed(e)) {
+        showMessage("Confirm your email first", "This email is registered but not confirmed yet. Confirm it, then sign up as Vet / Breeder again.");
+      } else {
+        showMessage(
+          "Email already registered",
+          "This email already has a PawMatch account. To add a vet / breeder profile to it, enter that account's current password.",
+        );
+      }
+      return;
+    }
+    try {
+      await api.addVerifierProfile(form.verifierRole, form.clinic, form.licenseNumber);
+    } catch (e) {
+      // Already signed in at this point, so the user lands in their existing account.
+      showMessage("Couldn't add your vet / breeder profile", api.errorMessage(e));
+      return;
+    }
+    await refreshSession();
+    switchPortal("vet");
+    showToast("Vet / breeder profile added", "Your dog owner account is unchanged. The PawMatch team will review your license.", "success");
+  };
+
   const submit = async () => {
     if (!validate()) return;
     if (!agree) {
@@ -906,7 +923,7 @@ export function Register() {
     }
     setLoading(true);
     try {
-      const { needsConfirmation } = await api.signUp({
+      const { needsConfirmation, alreadyRegistered } = await api.signUp({
         email: form.email,
         password: form.password,
         fullName: form.fullName,
@@ -917,7 +934,12 @@ export function Register() {
         clinic: form.clinic,
         licenseNumber: form.licenseNumber,
       });
-      if (needsConfirmation) navigate("verify-email", { email: form.email.trim().toLowerCase() });
+      if (alreadyRegistered) {
+        if (role === "verifier") await addToExistingAccount();
+        else showMessage("Email already registered", "An account with this email already exists. Sign in instead.");
+      } else if (needsConfirmation) {
+        navigate("verify-email", { email: form.email.trim().toLowerCase() });
+      }
       // Otherwise the new session signs the user in automatically.
     } catch (e) {
       showMessage("Registration failed", api.errorMessage(e));
@@ -1035,6 +1057,10 @@ export function Register() {
           <AuthField icon={IdCard} label="License / Certification No." value={form.licenseNumber} onChangeText={(v) => set("licenseNumber", v)} placeholder="PRC license number" autoCapitalize="characters" error={errors.licenseNumber} />
           <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT, lineHeight: 18 }}>
             Verifier accounts are reviewed by the PawMatch team before you can receive documents to verify.
+          </Text>
+          <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT, lineHeight: 18, marginTop: 8 }}>
+            Already a dog owner on PawMatch? Use the same email and password. Your vet / breeder profile is added to
+            that account and you can switch between the two.
           </Text>
         </View>
       )}
@@ -1211,7 +1237,7 @@ export function ForgotPassword() {
 
 /* ── Reset password with emailed code ───────────────────────────── */
 export function ResetPassword() {
-  const { params, goBack, refreshSession, resetTo, showToast } = useApp();
+  const { params, goBack, refreshSession, resetTo, showToast, portal } = useApp();
   const email: string = params.email ?? "";
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -1233,7 +1259,7 @@ export function ResetPassword() {
       await api.resetPasswordWithCode(email, code, password);
       const s = await refreshSession();
       showToast("Password updated", "You're signed in with your new password.", "success");
-      resetTo(s ? homeScreenFor(s) : "login");
+      resetTo(s ? homeScreenFor(s, portal) : "login");
     } catch (err) {
       showMessage("Reset failed", api.errorMessage(err));
     } finally {

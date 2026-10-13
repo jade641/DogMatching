@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { districtOf, FONT, FONT_BOLD, shadow, T, timeAgo } from "../constants/theme";
 import { useApp, useSession } from "../contexts/AppContext";
 import { useAsync } from "../hooks/useAsync";
@@ -163,15 +163,7 @@ export function HomeScreen() {
       >
         {/* Hero */}
         <View style={{ paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 64, paddingHorizontal: 20, overflow: "hidden", borderBottomLeftRadius: 28, borderBottomRightRadius: 28 }}>
-          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id="homeBg" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
-                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#homeBg)" />
-          </Svg>
+          <LinearGradient colors={[T.primary, T.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} />
           <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
           <View style={{ position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.06)", bottom: -30, left: -30 }} />
           <PawPrint size={22} color="#fff" style={{ position: "absolute", bottom: 74, right: 40, opacity: 0.2, transform: [{ rotate: "20deg" }] }} />

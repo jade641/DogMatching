@@ -1,4 +1,4 @@
-import type { DocType, RequestStatus, SubmissionStatus } from "../types";
+import type { ApplicationStatus, DocType, RequestStatus, SubmissionStatus } from "../types";
 
 /* ── Design tokens ─────────────────────────────────────────────── */
 export const T = {
@@ -95,6 +95,16 @@ export const SUBMISSION_STATUS: Record<SubmissionStatus, { label: string; tone: 
   vet_verified: { label: "Veterinarian Verified", tone: "success" },
   verification_failed: { label: "Verification Failed", tone: "danger" },
 };
+
+export const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; tone: Tone }> = {
+  pending: { label: "Pending", tone: "warning" },
+  approved: { label: "Approved", tone: "success" },
+  rejected: { label: "Not Approved", tone: "danger" },
+};
+
+export function applicationStatus(v: { approved: boolean; reviewed_at: string | null }): ApplicationStatus {
+  return v.approved ? "approved" : v.reviewed_at ? "rejected" : "pending";
+}
 
 export const REQUEST_STATUS: Record<RequestStatus, { label: string; tone: Tone }> = {
   pending: { label: "Pending", tone: "warning" },

@@ -269,14 +269,16 @@ export function VerifyUpload() {
 /* ── Step 2: choose verifier (Figure 17) ────────────────────────── */
 export function VerifyChoose() {
   const { goBack, replace, params, showToast } = useApp();
+  const session = useSession();
   const docs: StagedDoc[] = params.docs ?? [];
   const verifiers = useAsync(() => api.listVerifiers(), []);
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState(false);
 
-  const filtered = (verifiers.data ?? []).filter((v) =>
-    `${v.name} ${v.clinic} ${v.role}`.toLowerCase().includes(search.trim().toLowerCase()),
+  // An owner who is also a vet can't verify their own dogs.
+  const filtered = (verifiers.data ?? []).filter(
+    (v) => v.user_id !== session.user.id && `${v.name} ${v.clinic} ${v.role}`.toLowerCase().includes(search.trim().toLowerCase()),
   );
 
   const send = async () => {

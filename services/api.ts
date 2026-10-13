@@ -19,6 +19,7 @@ import type {
   Sex,
   Size,
   Submission,
+  VerifierApplication,
   VerifierProfile,
   VerifierRole,
 } from "../types";
@@ -113,8 +114,11 @@ export interface SignUpInput {
   licenseNumber?: string;
 }
 
-/** Returns true when Supabase requires the user to confirm their email first. */
-export async function signUp(input: SignUpInput): Promise<{ needsConfirmation: boolean }> {
+/**
+ * `needsConfirmation`: Supabase requires the user to confirm their email first.
+ * `alreadyRegistered`: the email belongs to an existing account; nothing was created.
+ */
+export async function signUp(input: SignUpInput): Promise<{ needsConfirmation: boolean; alreadyRegistered: boolean }> {
   const { data, error } = await supabase.auth.signUp({
     email: input.email.trim().toLowerCase(),
     password: input.password,
@@ -131,6 +135,9 @@ export async function signUp(input: SignUpInput): Promise<{ needsConfirmation: b
     },
   });
   if (error) {
+    if (error.code === "user_already_exists" || /already (been )?registered/i.test(error.message ?? "")) {
+      return { needsConfirmation: false, alreadyRegistered: true };
+    }
     // Supabase times out (504) when it cannot send the confirmation email.
     if (error.status === 504 || /timeout|timed out|error sending confirmation/i.test(error.message ?? "")) {
       fail(
@@ -142,9 +149,19 @@ export async function signUp(input: SignUpInput): Promise<{ needsConfirmation: b
   }
   // With email confirmation on, an existing address returns a user with no identities.
   if (data.user && data.user.identities && data.user.identities.length === 0) {
-    fail("An account with this email already exists.");
+    return { needsConfirmation: false, alreadyRegistered: true };
   }
-  return { needsConfirmation: !data.session };
+  return { needsConfirmation: !data.session, alreadyRegistered: false };
+}
+
+/** Adds a (pending) vet / breeder profile to the signed-in account, e.g. an existing dog owner. */
+export async function addVerifierProfile(verifierRole: VerifierRole, clinic: string, licenseNumber: string) {
+  const { error } = await supabase.rpc("add_verifier_profile", {
+    p_verifier_role: verifierRole,
+    p_clinic: clinic.trim(),
+    p_license_number: licenseNumber.trim(),
+  });
+  if (error) fail(error);
 }
 
 /** Confirms a new account with the code from the "Confirm signup" email; signs the user in. */
@@ -654,6 +671,23 @@ export async function getAuditTrail(dogId: string): Promise<AuditEntry[]> {
     .order("id", { ascending: false });
   if (error) fail(error);
   return data ?? [];
+}
+
+/* ── Admin: verifier applications ───────────────────────────────────── */
+
+export async function listVerifierApplications(): Promise<VerifierApplication[]> {
+  const { data, error } = await supabase.rpc("admin_list_verifiers");
+  if (error) fail(error);
+  return ((data ?? []) as VerifierApplication[]).map((a) => ({ ...a, documents_reviewed: Number(a.documents_reviewed) }));
+}
+
+export async function reviewVerifier(id: string, decision: "approve" | "reject", notes: string) {
+  const { error } = await supabase.rpc("admin_review_verifier", {
+    p_verifier_id: id,
+    p_decision: decision,
+    p_notes: notes,
+  });
+  if (error) fail(error);
 }
 
 /* ── Reviews & reputation ───────────────────────────────────────────── */

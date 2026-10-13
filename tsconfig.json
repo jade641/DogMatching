@@ -16,6 +16,9 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "strict": true,
+    "types": [
+      "node"
+    ],
     "allowImportingTsExtensions": true,
     "paths": {
       "@/*": [

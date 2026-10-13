@@ -1,4 +1,4 @@
-// Seeds demo accounts and dog profiles for beta testing, and approves verifiers.
+// Seeds demo accounts and dog profiles for beta testing, approves verifiers and manages admins.
 //
 // Requires the project's service-role key, which must never be shipped in the app.
 // Put it in .env.seed (git-ignored):
@@ -10,6 +10,8 @@
 //   npm run seed:demo                              create demo owners, vet and dogs
 //   npm run verifier:approve -- vet@example.com    approve a registered vet/breeder
 //   npm run verifier:list                          list verifier accounts awaiting approval
+//   npm run admin:grant -- you@example.com         let an account review verifiers in the app
+//   npm run admin:revoke -- you@example.com        remove admin rights
 import { createClient } from "@supabase/supabase-js";
 
 const url = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -36,7 +38,7 @@ async function approveVerifier(email) {
   if (!user) throw new Error(`No account found for ${email}`);
   const { data, error } = await admin
     .from("verifiers")
-    .update({ approved: true })
+    .update({ approved: true, reviewed_at: new Date().toISOString(), review_notes: null })
     .eq("user_id", user.id)
     .select("name, role, clinic, license_number");
   if (error) throw error;
@@ -44,11 +46,23 @@ async function approveVerifier(email) {
   console.log(`Approved ${data[0].name} (${data[0].role}, ${data[0].clinic || "no clinic"}, license ${data[0].license_number || "—"})`);
 }
 
+async function setAdmin(email, isAdmin) {
+  const user = await findUserByEmail(email);
+  if (!user) throw new Error(`No account found for ${email}`);
+  const { data: owner, error: oError } = await admin.from("owners").select("id").eq("user_id", user.id).maybeSingle();
+  if (oError) throw oError;
+  const role = isAdmin ? "admin" : owner ? "owner" : "verifier";
+  const { error } = await admin.from("users").update({ role }).eq("id", user.id);
+  if (error) throw error;
+  console.log(isAdmin ? `${email} is now an admin. Sign out and back in to see the Admin tab.` : `${email} is no longer an admin.`);
+}
+
 async function listPendingVerifiers() {
   const { data, error } = await admin
     .from("verifiers")
     .select("name, role, clinic, license_number, created_at, user:users(email, phone)")
     .eq("approved", false)
+    .is("reviewed_at", null)
     .order("created_at");
   if (error) throw error;
   if (!data.length) return console.log("No verifiers awaiting approval.");
@@ -193,6 +207,9 @@ try {
   if (command === "approve-verifier") {
     if (!arg) throw new Error("Usage: npm run verifier:approve -- someone@example.com");
     await approveVerifier(arg);
+  } else if (command === "grant-admin" || command === "revoke-admin") {
+    if (!arg) throw new Error(`Usage: npm run admin:${command.split("-")[0]} -- someone@example.com`);
+    await setAdmin(arg, command === "grant-admin");
   } else if (command === "list-verifiers") {
     await listPendingVerifiers();
   } else {

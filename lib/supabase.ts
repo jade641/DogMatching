@@ -1,7 +1,19 @@
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
+import * as ExpoCrypto from "expo-crypto";
 import { AppState, Platform } from "react-native";
+
+// React Native has no WebCrypto; supabase-js needs it to SHA-256 the PKCE code challenge.
+if (Platform.OS !== "web") {
+  const g = globalThis as { crypto?: { getRandomValues?: Crypto["getRandomValues"]; subtle?: SubtleCrypto } };
+  g.crypto ??= {};
+  g.crypto.getRandomValues ??= ExpoCrypto.getRandomValues as Crypto["getRandomValues"];
+  g.crypto.subtle ??= {
+    digest: (algorithm: AlgorithmIdentifier, data: BufferSource) =>
+      ExpoCrypto.digest(algorithm as ExpoCrypto.CryptoDigestAlgorithm, data),
+  } as SubtleCrypto;
+}
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";

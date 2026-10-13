@@ -12,6 +12,7 @@ import {
   KeyRound,
   LogOut,
   MapPin,
+  PawPrint,
   Search,
   Settings,
   ShieldAlert,
@@ -60,15 +61,30 @@ function useQueue() {
 
 function PendingApprovalBanner() {
   const session = useSession();
-  if (session.verifier?.approved) return null;
+  const v = session.verifier;
+  if (!v || v.approved) return null;
+  if (v.reviewed_at) {
+    return (
+      <View style={{ flexDirection: "row", gap: 12, padding: 14, borderRadius: 14, backgroundColor: T.errorLight, borderWidth: 1, borderColor: T.error }}>
+        <XCircle size={22} color={T.error} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Account not approved</Text>
+          {v.review_notes ? <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT, lineHeight: 18 }}>Reason: {v.review_notes}</Text> : null}
+          <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT, lineHeight: 18 }}>
+            Correct your license number under Profile → Professional Information to send it for another review.
+          </Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={{ flexDirection: "row", gap: 12, padding: 14, borderRadius: 14, backgroundColor: T.warningLight, borderWidth: 1, borderColor: T.secondary }}>
       <ShieldAlert size={22} color={T.warning} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>Account pending approval</Text>
         <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT, lineHeight: 18 }}>
-          The PawMatch team is checking your license ({session.verifier?.license_number || "not provided"}). Owners can
-          send you documents once your account is approved.
+          The PawMatch team is checking your license ({v.license_number || "not provided"}). Owners can send you
+          documents once your account is approved.
         </Text>
       </View>
     </View>
@@ -455,7 +471,7 @@ export function VetRecords() {
 
 /* ── Verifier profile ───────────────────────────────────────────── */
 export function VetProfile() {
-  const { navigate, refreshSession, showToast } = useApp();
+  const { navigate, refreshSession, showToast, switchPortal } = useApp();
   const session = useSession();
   const v = session.verifier;
   const queue = useQueue();
@@ -510,9 +526,15 @@ export function VetProfile() {
             {v.role} • {session.user.location}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-            {v.approved ? <CheckCircle size={14} color={T.success} /> : <Clock size={14} color={T.warning} />}
-            <Text style={{ fontSize: 13, color: v.approved ? T.success : T.warning, fontFamily: FONT_BOLD }}>
-              {v.approved ? "Approved verifier" : "Pending approval"}
+            {v.approved ? (
+              <CheckCircle size={14} color={T.success} />
+            ) : v.reviewed_at ? (
+              <XCircle size={14} color={T.error} />
+            ) : (
+              <Clock size={14} color={T.warning} />
+            )}
+            <Text style={{ fontSize: 13, color: v.approved ? T.success : v.reviewed_at ? T.error : T.warning, fontFamily: FONT_BOLD }}>
+              {v.approved ? "Approved verifier" : v.reviewed_at ? "Not approved" : "Pending approval"}
             </Text>
           </View>
         </View>
@@ -543,7 +565,13 @@ export function VetProfile() {
             {editing ? (
               <>
                 <Field label="Clinic / Kennel" value={clinic} onChangeText={setClinic} />
-                <Field label="License / Certification No." value={license} onChangeText={setLicense} autoCapitalize="characters" />
+                <Field
+                  label="License / Certification No."
+                  value={license}
+                  onChangeText={setLicense}
+                  autoCapitalize="characters"
+                  hint="Changing this sends your account back to the PawMatch team for approval."
+                />
                 <View style={{ flexDirection: "row", gap: 10 }}>
                   <Btn title="Cancel" variant="outline" onPress={() => setEditing(false)} style={{ flex: 1 }} />
                   <Btn title="Save" loading={saving} onPress={save} style={{ flex: 1 }} />
@@ -574,6 +602,12 @@ export function VetProfile() {
             <ListItem icon={ClipboardList} title="Verification Requests" onPress={() => navigate("vet-requests")} />
             <ListItem icon={FileText} title="Verification Records" onPress={() => navigate("vet-records")} last />
           </View>
+
+          {session.owner && (
+            <View style={{ borderRadius: 16, overflow: "hidden" }}>
+              <ListItem icon={PawPrint} title="Switch to Dog Owner" subtitle="Your dogs, matches and messages" onPress={() => switchPortal("owner")} last />
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
