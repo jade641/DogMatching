@@ -1,9 +1,11 @@
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import {
+  ArrowLeft,
   Award,
   Bell,
   Calendar,
+  Check,
   CheckCircle,
   Clock,
   Crown,
@@ -12,9 +14,12 @@ import {
   HelpCircle,
   Info,
   KeyRound,
+  Lock,
   Mail,
+  MapPin,
   MessageSquare,
   PawPrint,
+  Phone,
   Scale,
   Shield,
   Star,
@@ -23,7 +28,21 @@ import {
   XCircle,
 } from "lucide-react-native";
 import { type ComponentType, useState } from "react";
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  type TextInputProps,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import {
   DAVAO_DISTRICTS,
   DEFAULT_LOCATION,
@@ -34,6 +53,7 @@ import {
   FONT_MEDIUM,
   formatDate,
   REQUEST_STATUS,
+  shadow,
   T,
   timeAgo,
 } from "../constants/theme";
@@ -420,22 +440,203 @@ export function EditProfileScreen() {
     }
   };
 
+  const insets = useSafeAreaInsets();
+  const role = session.verifier ? "Verifier" : "Dog Owner";
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Header title="Edit Profile" icon={User} onBack={goBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        <Field label="Full Name" value={name} onChangeText={setName} autoComplete="name" />
-        <Field label="Email" value={session.user.email} editable={false} hint="Contact support to change your email address." />
-        <Field label="Phone Number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Location</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-          {[DEFAULT_LOCATION, ...DAVAO_DISTRICTS].map((d) => (
-            <Chip key={d} label={d} active={district === d} onPress={() => setDistrict(d)} />
-          ))}
+      <StatusBar style="light" />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        {/* Hero header */}
+        <View style={{ paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 76, paddingHorizontal: 20, overflow: "hidden", borderBottomLeftRadius: 28, borderBottomRightRadius: 28 }}>
+          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="editProfileBg" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
+                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#editProfileBg)" />
+          </Svg>
+          <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
+          <PawPrint size={22} color="#fff" style={{ position: "absolute", bottom: 36, left: 36, opacity: 0.18, transform: [{ rotate: "-20deg" }] }} />
+          <PawPrint size={18} color="#fff" style={{ position: "absolute", bottom: 52, right: 48, opacity: 0.18, transform: [{ rotate: "20deg" }] }} />
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <TouchableOpacity
+              onPress={goBack}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={8}
+              style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}
+            >
+              <ArrowLeft size={20} color="#fff" strokeWidth={2.5} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 22, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.3 }}>Edit Profile</Text>
+              <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 2 }}>
+                Keep your details up to date
+              </Text>
+            </View>
+          </View>
         </View>
-        <Btn title="Save Changes" size="large" loading={saving} onPress={save} />
+
+        {/* Avatar overlapping the hero */}
+        <View style={{ alignItems: "center", marginTop: -56, marginBottom: 20 }}>
+          <View
+            style={{
+              padding: 5,
+              borderRadius: 60,
+              backgroundColor: T.white,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.12,
+              shadowRadius: 20,
+              elevation: 8,
+            }}
+          >
+            <Avatar name={name.trim() || session.user.full_name} size={100} />
+          </View>
+          <Text style={{ fontSize: 19, color: T.dark, fontFamily: FONT_BOLD, marginTop: 12, textAlign: "center", paddingHorizontal: 24 }} numberOfLines={1}>
+            {name.trim() || session.user.full_name}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20, backgroundColor: T.primaryLight }}>
+            <PawPrint size={13} color={T.primaryDark} strokeWidth={2.25} />
+            <Text style={{ fontSize: 12, color: T.primaryDark, fontFamily: FONT_BOLD }}>{role}</Text>
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 16, gap: 16 }}>
+          <ProfileSection icon={User} title="Personal Info">
+            <IconField icon={User} label="Full Name" value={name} onChangeText={setName} autoComplete="name" placeholder="Enter your full name" />
+            <IconField
+              icon={Mail}
+              label="Email"
+              value={session.user.email}
+              editable={false}
+              locked
+              hint="Contact support to change your email address."
+            />
+            <IconField icon={Phone} label="Phone Number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" placeholder="0917 123 4567" last />
+          </ProfileSection>
+
+          <ProfileSection icon={MapPin} title="Location" subtitle={`Currently set to ${district}`}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {[DEFAULT_LOCATION, ...DAVAO_DISTRICTS].map((d) => (
+                <Chip key={d} label={d} active={district === d} onPress={() => setDistrict(d)} />
+              ))}
+            </View>
+          </ProfileSection>
+
+          <TouchableOpacity
+            onPress={save}
+            disabled={saving}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Save Changes"
+            accessibilityState={{ disabled: saving, busy: saving }}
+            style={{
+              marginTop: 4,
+              height: 56,
+              borderRadius: 16,
+              backgroundColor: T.primary,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              opacity: saving ? 0.8 : 1,
+              shadowColor: T.primary,
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 18,
+              elevation: 6,
+            }}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Check size={20} color="#fff" strokeWidth={2.5} />
+                <Text style={{ fontSize: 17, color: "#fff", fontFamily: FONT_BOLD }}>Save Changes</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function ProfileSection({ icon: Icon, title, subtitle, children }: {
+  icon: typeof User;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ backgroundColor: T.white, borderRadius: 22, padding: 18, ...shadow }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
+          <Icon size={17} color={T.primary} strokeWidth={2.25} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, color: T.dark, fontFamily: FONT_BOLD }}>{title}</Text>
+          {subtitle ? <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, marginTop: 1 }}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/** Input with a leading icon; `locked` renders a read-only field with a lock badge. */
+function IconField({ icon: Icon, label, hint, locked, last, ...input }: {
+  icon: typeof User;
+  label: string;
+  hint?: string;
+  locked?: boolean;
+  last?: boolean;
+} & Omit<TextInputProps, "style">) {
+  const [focused, setFocused] = useState(false);
+  const active = focused && !locked;
+  return (
+    <View style={{ marginBottom: last ? 0 : 16 }}>
+      <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>{label}</Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          height: 54,
+          paddingHorizontal: 14,
+          borderRadius: 14,
+          borderWidth: 1.5,
+          borderColor: active ? T.primary : T.border,
+          backgroundColor: locked ? T.bg : active ? T.white : "#FAFAF9",
+        }}
+      >
+        <Icon size={20} color={active ? T.primary : T.medium} strokeWidth={2} />
+        <TextInput
+          {...input}
+          accessibilityLabel={label}
+          placeholderTextColor={T.light}
+          onFocus={(e) => {
+            setFocused(true);
+            input.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            input.onBlur?.(e);
+          }}
+          style={[
+            { flex: 1, height: "100%", fontSize: 15, color: locked ? T.medium : T.dark, fontFamily: FONT },
+            Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null,
+          ]}
+        />
+        {locked && <Lock size={16} color={T.light} strokeWidth={2.25} />}
+      </View>
+      {hint ? <Text style={{ fontSize: 12, color: T.medium, marginTop: 6, fontFamily: FONT }}>{hint}</Text> : null}
+    </View>
   );
 }
 

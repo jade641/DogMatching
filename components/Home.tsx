@@ -17,7 +17,9 @@ import {
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { districtOf, FONT, FONT_BOLD, shadow, T, timeAgo } from "../constants/theme";
 import { useApp, useSession } from "../contexts/AppContext";
 import { useAsync } from "../hooks/useAsync";
@@ -31,16 +33,79 @@ import { Avatar, Btn, Card, Chip, EmptyState, ErrorView, Header, Loading, Sectio
 
 function NoDogPrompt() {
   const { navigate } = useApp();
+  const steps = [
+    { Icon: PawPrint, title: "Create a dog profile", text: "Breed, age, size and temperament" },
+    { Icon: ShieldCheck, title: "Verify health records", text: "Get checked by a licensed vet" },
+    { Icon: Heart, title: "Get matched", text: "See the most compatible partners" },
+  ];
   return (
-    <Card style={{ marginHorizontal: 20, marginBottom: 20 }}>
-      <EmptyState
-        icon={PawPrint}
-        title="Add your first dog"
-        message="Create your dog's profile so PawMatch can score compatible breeding partners for you."
-        actionLabel="Add Dog Profile"
-        onAction={() => navigate("add-dog")}
-      />
-    </Card>
+    <View style={{ marginHorizontal: 20, marginBottom: 24, borderRadius: 24, backgroundColor: T.white, padding: 20, ...shadow }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 18 }}>
+        <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
+          <PawPrint size={28} color={T.primary} strokeWidth={2} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 18, color: T.dark, fontFamily: FONT_BOLD }}>Add your first dog</Text>
+          <Text style={{ fontSize: 13, lineHeight: 19, color: T.medium, fontFamily: FONT, marginTop: 2 }}>
+            Get started in three easy steps.
+          </Text>
+        </View>
+      </View>
+
+      {steps.map((s, i) => (
+        <View key={s.title} style={{ flexDirection: "row", gap: 14 }}>
+          <View style={{ alignItems: "center" }}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: i === 0 ? T.primary : T.bg, alignItems: "center", justifyContent: "center" }}>
+              <s.Icon size={16} color={i === 0 ? "#fff" : T.medium} strokeWidth={2} />
+            </View>
+            {i < steps.length - 1 && <View style={{ width: 2, flex: 1, minHeight: 14, backgroundColor: T.border, marginVertical: 4 }} />}
+          </View>
+          <View style={{ flex: 1, paddingTop: 6, paddingBottom: i < steps.length - 1 ? 14 : 0 }}>
+            <Text style={{ fontSize: 14, color: T.dark, fontFamily: FONT_BOLD }}>{s.title}</Text>
+            <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, marginTop: 2 }}>{s.text}</Text>
+          </View>
+        </View>
+      ))}
+
+      <TouchableOpacity
+        onPress={() => navigate("add-dog")}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        style={{
+          marginTop: 20,
+          height: 52,
+          borderRadius: 16,
+          backgroundColor: T.primary,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          shadowColor: T.primary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.28,
+          shadowRadius: 14,
+          elevation: 5,
+        }}
+      >
+        <Plus size={20} color="#fff" strokeWidth={2.5} />
+        <Text style={{ fontSize: 16, color: "#fff", fontFamily: FONT_BOLD }}>Add Dog Profile</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function HeaderIcon({ onPress, label, badge, children }: { onPress: () => void; label: string; badge?: boolean; children: React.ReactNode }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
+    >
+      {children}
+      {badge && <Dot />}
+    </TouchableOpacity>
   );
 }
 
@@ -76,109 +141,177 @@ export function HomeScreen() {
     top.reload(true);
   };
 
+  const stats = [
+    { Icon: Heart, n: incomingPending, t: "Match\nRequests", color: T.primary, tint: T.primaryLight, go: () => navigate("requests") },
+    { Icon: CheckCircle, n: verifiedNearby.data ?? 0, t: district ? `Verified in\n${district}` : "Verified\nDogs", color: T.success, tint: T.successLight, go: () => navigate("match") },
+    { Icon: Bell, n: unreadCount, t: "Unread\nAlerts", color: T.accent, tint: T.accentLight, go: () => navigate("notifications") },
+  ];
+
+  const actions = [
+    { Icon: Sparkles, label: "Find Match", color: T.primary, tint: T.primaryLight, go: () => navigate(myDogs.length ? "filter" : "add-dog") },
+    { Icon: Search, label: "Browse", color: T.accent, tint: T.accentLight, go: () => navigate("match") },
+    { Icon: Plus, label: "Add Dog", color: T.success, tint: T.successLight, go: () => navigate("add-dog") },
+    { Icon: MessageCircle, label: "Messages", color: T.secondaryDark, tint: T.secondaryLight, go: () => navigate("requests") },
+  ];
+
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 20,
-          paddingTop: Math.max(insets.top, 16) + 8,
-          paddingBottom: 12,
-          backgroundColor: T.white,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <PawPrint size={20} color={T.primary} strokeWidth={2} />
-          <Text style={{ fontSize: 18, color: T.primary, fontFamily: FONT_BOLD }}>PawMatch</Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
-          <TouchableOpacity onPress={() => navigate("requests")} accessibilityRole="button" accessibilityLabel="Requests and messages" hitSlop={8}>
-            <MessageCircle size={21} color={T.dark} strokeWidth={1.6} />
-            {incomingPending > 0 && <Dot />}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigate("notifications")} accessibilityRole="button" accessibilityLabel="Notifications" hitSlop={8}>
-            <Bell size={21} color={T.dark} strokeWidth={1.6} />
-            {unreadCount > 0 && <Dot />}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigate("owner-profile")} accessibilityRole="button" accessibilityLabel="My profile">
-            <Avatar name={session.user.full_name} size={34} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
+      <StatusBar style="light" />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor={T.primary} />}
       >
-        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 }}>
-          <Text style={{ fontSize: 21, color: T.dark, fontFamily: FONT_BOLD }}>
-            {greeting}, {firstName}
-          </Text>
-          <Text style={{ fontSize: 14, marginTop: 2, color: T.medium, fontFamily: FONT }}>
-            Here&apos;s what&apos;s new for your dogs today.
-          </Text>
+        {/* Hero */}
+        <View style={{ paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 64, paddingHorizontal: 20, overflow: "hidden", borderBottomLeftRadius: 28, borderBottomRightRadius: 28 }}>
+          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="homeBg" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
+                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#homeBg)" />
+          </Svg>
+          <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
+          <View style={{ position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.06)", bottom: -30, left: -30 }} />
+          <PawPrint size={22} color="#fff" style={{ position: "absolute", bottom: 74, right: 40, opacity: 0.2, transform: [{ rotate: "20deg" }] }} />
+
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}>
+                <PawPrint size={18} color="#fff" strokeWidth={2.25} />
+              </View>
+              <Text style={{ fontSize: 19, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.3 }}>PawMatch</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <HeaderIcon onPress={() => navigate("requests")} label="Requests and messages" badge={incomingPending > 0}>
+                <MessageCircle size={20} color="#fff" strokeWidth={2} />
+              </HeaderIcon>
+              <HeaderIcon onPress={() => navigate("notifications")} label="Notifications" badge={unreadCount > 0}>
+                <Bell size={20} color="#fff" strokeWidth={2} />
+              </HeaderIcon>
+              <TouchableOpacity
+                onPress={() => navigate("owner-profile")}
+                accessibilityRole="button"
+                accessibilityLabel="My profile"
+                style={{ borderRadius: 21, borderWidth: 2, borderColor: "rgba(255,255,255,0.7)" }}
+              >
+                <Avatar name={session.user.full_name} size={38} color={T.primaryDark} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 24 }}>{greeting} 👋</Text>
+          <Text style={{ fontSize: 28, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.5, marginTop: 2 }}>{firstName}</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              alignSelf: "flex-start",
+              gap: 6,
+              marginTop: 10,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 20,
+              backgroundColor: "rgba(255,255,255,0.2)",
+            }}
+          >
+            <MapPin size={14} color="#fff" strokeWidth={2.25} />
+            <Text style={{ fontSize: 13, color: "#fff", fontFamily: FONT_BOLD }}>{session.user.location || "Davao City"}</Text>
+          </View>
         </View>
 
-        <View style={{ paddingHorizontal: 20, marginBottom: 20, flexDirection: "row", gap: 12 }}>
-          {[
-            { Icon: Heart, n: incomingPending, t: "New Match Requests", go: () => navigate("requests") },
-            { Icon: CheckCircle, n: verifiedNearby.data ?? 0, t: district ? `Verified in ${district}` : "Verified Dogs", go: () => navigate("match") },
-            { Icon: Bell, n: unreadCount, t: "Unread Alerts", go: () => navigate("notifications") },
-          ].map((s) => (
+        {/* Stats card overlapping the hero */}
+        <View
+          style={{
+            marginTop: -40,
+            marginHorizontal: 20,
+            marginBottom: 24,
+            flexDirection: "row",
+            borderRadius: 22,
+            backgroundColor: T.white,
+            paddingVertical: 16,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.08,
+            shadowRadius: 20,
+            elevation: 6,
+          }}
+        >
+          {stats.map((s, i) => (
             <TouchableOpacity
               key={s.t}
               onPress={s.go}
-              style={{ flex: 1, borderRadius: 14, padding: 12, backgroundColor: T.white, alignItems: "center", ...shadow }}
+              activeOpacity={0.7}
+              style={{ flex: 1, alignItems: "center", borderLeftWidth: i === 0 ? 0 : 1, borderLeftColor: T.border, paddingHorizontal: 6 }}
             >
-              <s.Icon size={22} color={T.primary} strokeWidth={1.5} />
-              <Text style={{ fontSize: 19, marginTop: 4, color: T.primary, fontFamily: FONT_BOLD }}>{s.n}</Text>
-              <Text style={{ fontSize: 11, marginTop: 2, textAlign: "center", color: T.medium, lineHeight: 15, fontFamily: FONT }}>
-                {s.t}
-              </Text>
+              <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: s.tint, alignItems: "center", justifyContent: "center" }}>
+                <s.Icon size={19} color={s.color} strokeWidth={2} />
+              </View>
+              <Text style={{ fontSize: 22, marginTop: 8, color: T.dark, fontFamily: FONT_BOLD }}>{s.n}</Text>
+              <Text style={{ fontSize: 11, marginTop: 2, textAlign: "center", color: T.medium, lineHeight: 14, fontFamily: FONT }}>{s.t}</Text>
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Quick actions */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+          <Text style={{ fontSize: 16, color: T.dark, fontFamily: FONT_BOLD, marginBottom: 12 }}>Quick Actions</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            {actions.map((a) => (
+              <TouchableOpacity key={a.label} onPress={a.go} activeOpacity={0.75} style={{ alignItems: "center", width: "23%" }}>
+                <View style={{ width: 58, height: 58, borderRadius: 20, backgroundColor: T.white, alignItems: "center", justifyContent: "center", ...shadow }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: a.tint, alignItems: "center", justifyContent: "center" }}>
+                    <a.Icon size={20} color={a.color} strokeWidth={2} />
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: T.dark, fontFamily: FONT_BOLD, marginTop: 8 }}>{a.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {myDogs.length === 0 ? (
           <NoDogPrompt />
         ) : (
           <>
-            <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+            <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={() => navigate("filter")}
-                style={{ borderRadius: 22, padding: 18, backgroundColor: T.primary, overflow: "hidden", gap: 8 }}
+                style={{ borderRadius: 24, padding: 20, overflow: "hidden", gap: 8, backgroundColor: T.dark }}
               >
-                <View
-                  style={{
-                    position: "absolute",
-                    right: -24,
-                    top: -20,
-                    width: 120,
-                    height: 120,
-                    borderRadius: 60,
-                    backgroundColor: "rgba(255,255,255,0.12)",
-                  }}
-                />
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Sparkles size={16} color="#fff" strokeWidth={2} />
-                  <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", fontFamily: FONT_BOLD, letterSpacing: 0.6 }}>
-                    BREEDING MATCH
-                  </Text>
+                <View style={{ position: "absolute", right: -30, top: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: T.primary, opacity: 0.9 }} />
+                <View style={{ position: "absolute", right: 30, bottom: -50, width: 100, height: 100, borderRadius: 50, backgroundColor: "rgba(255,255,255,0.06)" }} />
+                <Heart size={36} color="#fff" strokeWidth={2} style={{ position: "absolute", right: 20, top: 18 }} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Sparkles size={14} color={T.secondary} strokeWidth={2.25} />
+                  <Text style={{ fontSize: 11, color: T.secondary, fontFamily: FONT_BOLD, letterSpacing: 1 }}>BREEDING MATCH</Text>
                 </View>
-                <Text style={{ fontSize: 19, lineHeight: 25, color: "#fff", fontFamily: FONT_BOLD }}>
+                <Text style={{ fontSize: 19, lineHeight: 25, color: "#fff", fontFamily: FONT_BOLD, maxWidth: "78%" }}>
                   Set your preferred traits and instantly see the 3 best candidates.
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-                  <Text style={{ color: "#fff", fontFamily: FONT_BOLD }}>Open Matcher</Text>
-                  <ChevronRight size={18} color="#fff" />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    alignSelf: "flex-start",
+                    gap: 4,
+                    marginTop: 8,
+                    paddingVertical: 9,
+                    paddingLeft: 16,
+                    paddingRight: 10,
+                    borderRadius: 14,
+                    backgroundColor: T.primary,
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontFamily: FONT_BOLD, fontSize: 14 }}>Open Matcher</Text>
+                  <ChevronRight size={18} color="#fff" strokeWidth={2.5} />
                 </View>
               </TouchableOpacity>
             </View>
 
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: 24 }}>
               <View style={{ paddingHorizontal: 20 }}>
                 <SectionTitle
                   title="Your Top Matches Today"
@@ -199,7 +332,7 @@ export function HomeScreen() {
               ) : top.error ? (
                 <ErrorView message={top.error} onRetry={() => top.reload()} />
               ) : (top.data ?? []).length === 0 ? (
-                <Card style={{ marginHorizontal: 20 }}>
+                <Card style={{ marginHorizontal: 20, borderRadius: 22 }}>
                   <EmptyState
                     icon={Search}
                     title="No compatible dogs yet"
@@ -236,15 +369,34 @@ export function HomeScreen() {
             }
           />
           {notifications.length === 0 ? (
-            <Text style={{ color: T.medium, fontFamily: FONT, fontSize: 13 }}>
-              No activity yet. Requests, messages and verification results will appear here.
-            </Text>
+            <View style={{ borderRadius: 22, backgroundColor: T.white, paddingVertical: 26, paddingHorizontal: 20, alignItems: "center", ...shadow }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: T.bg, alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Bell size={24} color={T.light} strokeWidth={2} />
+              </View>
+              <Text style={{ fontSize: 15, color: T.dark, fontFamily: FONT_BOLD }}>No activity yet</Text>
+              <Text style={{ fontSize: 13, lineHeight: 19, color: T.medium, fontFamily: FONT, textAlign: "center", marginTop: 4 }}>
+                Requests, messages and verification results will appear here.
+              </Text>
+            </View>
           ) : (
-            <View style={{ gap: 10 }}>
-              {notifications.slice(0, 4).map((n) => (
-                <Card key={n.id} onPress={() => openNotification(n)} style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
-                    <Bell size={16} color={T.primary} strokeWidth={1.75} />
+            <View style={{ borderRadius: 22, backgroundColor: T.white, paddingVertical: 6, ...shadow }}>
+              {notifications.slice(0, 4).map((n, i, list) => (
+                <TouchableOpacity
+                  key={n.id}
+                  onPress={() => openNotification(n)}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: "row",
+                    gap: 12,
+                    alignItems: "flex-start",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderBottomWidth: i < list.length - 1 ? 1 : 0,
+                    borderBottomColor: T.bg,
+                  }}
+                >
+                  <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
+                    <Bell size={17} color={T.primary} strokeWidth={2} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, color: T.dark, fontFamily: n.read ? FONT : FONT_BOLD }}>{n.title}</Text>
@@ -253,7 +405,8 @@ export function HomeScreen() {
                     </Text>
                     <Text style={{ fontSize: 11, marginTop: 4, color: T.light, fontFamily: FONT }}>{timeAgo(n.created_at)}</Text>
                   </View>
-                </Card>
+                  {!n.read && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: T.primary, marginTop: 6 }} />}
+                </TouchableOpacity>
               ))}
             </View>
           )}

@@ -1,8 +1,10 @@
 import {
+  ArrowLeft,
   Award,
   Bell,
   Calendar,
   Camera,
+  Check,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -13,23 +15,30 @@ import {
   HelpCircle,
   KeyRound,
   LogOut,
+  Mars,
   MapPin,
   MessageCircle,
   MessageSquare,
   PawPrint,
   Plus,
+  Ruler,
   Send,
   Settings,
+  Smile,
   ShieldCheck,
   Star,
   Stethoscope,
   Trash2,
   Upload,
   User,
+  Venus,
   X,
 } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import {
   capitalize,
   DOC_TYPES,
@@ -522,110 +531,270 @@ function DogForm({ existing }: { existing?: Dog }) {
   };
 
   const preview = photo?.uri ?? existing?.img ?? null;
+  const insets = useSafeAreaInsets();
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: T.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Header title={existing ? `Edit ${existing.name}` : "Add New Dog"} icon={PawPrint} onBack={goBack} />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        <View style={{ alignItems: "center", marginBottom: 22 }}>
-          <TouchableOpacity onPress={choosePhoto} accessibilityRole="button" accessibilityLabel="Choose dog photo">
-            {preview ? (
-              <DogImage uri={preview} width={120} height={120} radius={60} style={{ borderWidth: 3, borderColor: T.primary }} />
+      <StatusBar style="light" />
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        {/* Hero header */}
+        <View style={{ paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: 84, paddingHorizontal: 20, overflow: "hidden", borderBottomLeftRadius: 28, borderBottomRightRadius: 28 }}>
+          <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="dogFormBg" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
+                <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#dogFormBg)" />
+          </Svg>
+          <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
+          <PawPrint size={22} color="#fff" style={{ position: "absolute", bottom: 40, left: 36, opacity: 0.18, transform: [{ rotate: "-20deg" }] }} />
+          <PawPrint size={18} color="#fff" style={{ position: "absolute", bottom: 60, right: 50, opacity: 0.18, transform: [{ rotate: "20deg" }] }} />
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <TouchableOpacity
+              onPress={goBack}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              hitSlop={8}
+              style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}
+            >
+              <ArrowLeft size={20} color="#fff" strokeWidth={2.5} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 22, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.3 }} numberOfLines={1}>
+                {existing ? `Edit ${existing.name}` : "Add New Dog"}
+              </Text>
+              <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 2 }}>
+                {existing ? "Keep your dog's profile up to date" : "Tell us about your furry friend"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Photo picker overlapping the hero */}
+        <View style={{ alignItems: "center", marginTop: -64, marginBottom: 20 }}>
+          <TouchableOpacity onPress={choosePhoto} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Choose dog photo">
+            <View
+              style={{
+                width: 128,
+                height: 128,
+                borderRadius: 40,
+                backgroundColor: T.white,
+                padding: 5,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.12,
+                shadowRadius: 20,
+                elevation: 8,
+              }}
+            >
+              {preview ? (
+                <DogImage uri={preview} width={118} height={118} radius={35} />
+              ) : (
+                <View
+                  style={{
+                    flex: 1,
+                    borderRadius: 35,
+                    backgroundColor: T.primaryLight,
+                    borderWidth: 2,
+                    borderColor: T.primary,
+                    borderStyle: "dashed",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                  }}
+                >
+                  <PawPrint size={34} color={T.primary} strokeWidth={1.75} />
+                  <Text style={{ fontSize: 11, color: T.primary, fontFamily: FONT_BOLD }}>Add Photo</Text>
+                </View>
+              )}
+            </View>
+            <View
+              style={{
+                position: "absolute",
+                right: -4,
+                bottom: -4,
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: T.primary,
+                borderWidth: 3,
+                borderColor: T.white,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Camera size={17} color="#fff" strokeWidth={2.25} />
+            </View>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, marginTop: 12 }}>
+            {preview ? "Tap to change photo" : "A clear photo helps owners trust your listing"}
+          </Text>
+        </View>
+
+        <View style={{ paddingHorizontal: 16, gap: 16 }}>
+          <FormSection icon={PawPrint} title="Basic Info">
+            <Field label="Dog's Name *" value={form.name} onChangeText={(v) => set("name", v)} placeholder="e.g. Bella" maxLength={40} error={errors.name} />
+
+            <Text style={{ fontSize: 13, color: T.dark, marginBottom: 6, fontFamily: FONT_MEDIUM }}>Breed *</Text>
+            <BreedInput value={form.breed} onChange={(v) => set("breed", v)} error={errors.breed} />
+
+            <Field
+              label="Age (years) *"
+              value={form.age}
+              onChangeText={(v) => set("age", v)}
+              placeholder="e.g. 2 or 0.5 for 6 months"
+              keyboardType="decimal-pad"
+              error={errors.age}
+              style={{ marginBottom: 0 }}
+            />
+          </FormSection>
+
+          <FormSection icon={Ruler} title="Physical Traits">
+            <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Sex *</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 18 }}>
+              {(
+                [
+                  { id: "female", Icon: Venus, color: "#E0559B" },
+                  { id: "male", Icon: Mars, color: T.accent },
+                ] as const
+              ).map(({ id, Icon, color }) => (
+                <SegmentButton
+                  key={id}
+                  label={capitalize(id)}
+                  active={form.sex === id}
+                  onPress={() => set("sex", id)}
+                  icon={<Icon size={18} color={form.sex === id ? color : T.light} strokeWidth={2.25} />}
+                />
+              ))}
+            </View>
+
+            <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Size *</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginBottom: 18 }}>
+              {(["small", "medium", "large"] as const).map((s, i) => (
+                <SegmentButton
+                  key={s}
+                  label={capitalize(s)}
+                  active={form.size === s}
+                  onPress={() => set("size", s)}
+                  stacked
+                  icon={<PawPrint size={14 + i * 5} color={form.size === s ? T.primary : T.light} strokeWidth={2} />}
+                />
+              ))}
+            </View>
+
+            <Text style={{ fontSize: 13, color: T.dark, marginBottom: 6, fontFamily: FONT_MEDIUM }}>Color *</Text>
+            <ColorCombobox value={form.color} onChange={(v) => set("color", v)} />
+            {errors.color ? <Text style={{ fontSize: 12, color: T.error, marginTop: -8, fontFamily: FONT }}>{errors.color}</Text> : null}
+          </FormSection>
+
+          <FormSection icon={Smile} title="Personality" subtitle="Pick up to 3 traits that describe your dog">
+            <TemperamentPicker value={form.temperament} onChange={(v) => set("temperament", v)} />
+            {errors.temperament ? <Text style={{ fontSize: 12, color: T.error, marginTop: 6, fontFamily: FONT }}>{errors.temperament}</Text> : null}
+          </FormSection>
+
+          <FormSection icon={FileText} title="About" subtitle="Optional">
+            <Field
+              value={form.description}
+              onChangeText={(v) => set("description", v)}
+              placeholder="Health history, personality, breeding experience…"
+              multiline
+              maxLength={1000}
+              style={{ marginBottom: 0 }}
+            />
+          </FormSection>
+
+          <TouchableOpacity
+            onPress={submit}
+            disabled={saving}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={existing ? "Save Changes" : "Add Dog Profile"}
+            accessibilityState={{ disabled: saving, busy: saving }}
+            style={{
+              marginTop: 4,
+              height: 56,
+              borderRadius: 16,
+              backgroundColor: T.primary,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              opacity: saving ? 0.8 : 1,
+              shadowColor: T.primary,
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 18,
+              elevation: 6,
+            }}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
             ) : (
-              <View
-                style={{
-                  width: 120,
-                  height: 120,
-                  borderRadius: 60,
-                  backgroundColor: T.primaryLight,
-                  borderWidth: 3,
-                  borderColor: T.primary,
-                  borderStyle: "dashed",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                }}
-              >
-                <Camera size={30} color={T.primary} strokeWidth={1.5} />
-                <Text style={{ fontSize: 12, color: T.primary, fontFamily: FONT_BOLD }}>Add Photo</Text>
-              </View>
+              <>
+                {existing ? <Check size={20} color="#fff" strokeWidth={2.5} /> : <Plus size={20} color="#fff" strokeWidth={2.5} />}
+                <Text style={{ fontSize: 17, color: "#fff", fontFamily: FONT_BOLD }}>{existing ? "Save Changes" : "Add Dog Profile"}</Text>
+              </>
             )}
           </TouchableOpacity>
-          {preview && (
-            <TouchableOpacity onPress={choosePhoto} style={{ marginTop: 8 }}>
-              <Text style={{ fontSize: 13, color: T.primary, fontFamily: FONT_BOLD }}>Change photo</Text>
-            </TouchableOpacity>
-          )}
         </View>
-
-        <Field label="Dog's Name *" value={form.name} onChangeText={(v) => set("name", v)} placeholder="e.g. Bella" maxLength={40} error={errors.name} />
-
-        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 6, fontFamily: FONT_MEDIUM }}>Breed *</Text>
-        <BreedInput value={form.breed} onChange={(v) => set("breed", v)} error={errors.breed} />
-
-        <Field
-          label="Age (years) *"
-          value={form.age}
-          onChangeText={(v) => set("age", v)}
-          placeholder="e.g. 2 or 0.5 for 6 months"
-          keyboardType="decimal-pad"
-          error={errors.age}
-        />
-
-        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Sex *</Text>
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
-          {(["female", "male"] as const).map((s) => (
-            <SegmentButton key={s} label={capitalize(s)} active={form.sex === s} onPress={() => set("sex", s)} />
-          ))}
-        </View>
-
-        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Size *</Text>
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
-          {(["small", "medium", "large"] as const).map((s) => (
-            <SegmentButton key={s} label={capitalize(s)} active={form.size === s} onPress={() => set("size", s)} />
-          ))}
-        </View>
-
-        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 6, fontFamily: FONT_MEDIUM }}>Color *</Text>
-        <ColorCombobox value={form.color} onChange={(v) => set("color", v)} />
-        {errors.color ? <Text style={{ fontSize: 12, color: T.error, marginTop: -8, marginBottom: 10, fontFamily: FONT }}>{errors.color}</Text> : null}
-
-        <Text style={{ fontSize: 13, color: T.dark, marginBottom: 8, fontFamily: FONT_MEDIUM }}>Temperament * (up to 3)</Text>
-        <TemperamentPicker value={form.temperament} onChange={(v) => set("temperament", v)} />
-        {errors.temperament ? <Text style={{ fontSize: 12, color: T.error, marginTop: 6, fontFamily: FONT }}>{errors.temperament}</Text> : null}
-
-        <Field
-          label="About (optional)"
-          value={form.description}
-          onChangeText={(v) => set("description", v)}
-          placeholder="Health history, personality, breeding experience…"
-          multiline
-          maxLength={1000}
-          style={{ marginTop: 18 }}
-        />
-
-        <Btn title={existing ? "Save Changes" : "Add Dog Profile"} size="large" loading={saving} onPress={submit} style={{ marginTop: 6 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-function SegmentButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function FormSection({ icon: Icon, title, subtitle, children }: {
+  icon: typeof PawPrint;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={{ backgroundColor: T.white, borderRadius: 22, padding: 18, ...shadow }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: T.primaryLight, alignItems: "center", justifyContent: "center" }}>
+          <Icon size={17} color={T.primary} strokeWidth={2.25} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, color: T.dark, fontFamily: FONT_BOLD }}>{title}</Text>
+          {subtitle ? <Text style={{ fontSize: 12, color: T.medium, fontFamily: FONT, marginTop: 1 }}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function SegmentButton({ label, active, onPress, icon, stacked }: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  icon?: React.ReactNode;
+  stacked?: boolean;
+}) {
   return (
     <TouchableOpacity
       onPress={onPress}
+      activeOpacity={0.8}
       accessibilityRole="radio"
       accessibilityState={{ selected: active }}
       style={{
         flex: 1,
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 2,
+        flexDirection: stacked ? "column" : "row",
+        justifyContent: "center",
+        gap: stacked ? 4 : 8,
+        minHeight: stacked ? 66 : 50,
+        paddingVertical: 10,
+        borderRadius: 14,
+        borderWidth: 1.5,
         borderColor: active ? T.primary : T.border,
-        backgroundColor: active ? T.primaryLight : T.white,
+        backgroundColor: active ? T.primaryLight : "#FAFAF9",
         alignItems: "center",
       }}
     >
+      {icon}
       <Text style={{ fontSize: 14, color: active ? T.primaryDark : T.medium, fontFamily: FONT_BOLD }}>{label}</Text>
     </TouchableOpacity>
   );

@@ -157,8 +157,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (s) {
         resetTo(homeScreenFor(s));
       } else {
-        const seen = await AsyncStorage.getItem(LANDING_SEEN_KEY).catch(() => null);
-        resetTo(seen ? "login" : "landing");
+        // Always open on the landing carousel when signed out.
+        resetTo("landing");
       }
     } catch (e) {
       setBootError(api.errorMessage(e));
