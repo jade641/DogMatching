@@ -1,5 +1,6 @@
+import { StatusBar } from "expo-status-bar";
 import { AlertCircle, ArrowLeft, Eye, EyeOff, PawPrint, Star } from "lucide-react-native";
-import { type ComponentType, type ReactNode, useState } from "react";
+import { type ComponentType, type ReactNode, useId, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +16,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { FONT, FONT_BOLD, FONT_MEDIUM, initials, shadow, T, type Tone } from "../constants/theme";
 
 type IconType = ComponentType<{ size?: number; color?: string; strokeWidth?: number; fill?: string }>;
@@ -46,6 +48,118 @@ export function confirmAction(
 }
 
 /* ── Layout ─────────────────────────────────────────────────────── */
+/**
+ * Orange gradient page header. `children` render under the title; `overlap`
+ * adds bottom space so the first card below can pull up over the hero.
+ */
+export function HeroHeader({
+  title,
+  subtitle,
+  eyebrow,
+  onBack,
+  right,
+  overlap = 0,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  eyebrow?: string;
+  onBack?: () => void;
+  right?: ReactNode;
+  overlap?: number;
+  children?: ReactNode;
+}) {
+  const insets = useSafeAreaInsets();
+  const gradientId = `hero${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  return (
+    <View
+      style={{
+        paddingTop: Math.max(insets.top, 16) + 8,
+        paddingBottom: 22 + overlap,
+        paddingHorizontal: 20,
+        overflow: "hidden",
+        borderBottomLeftRadius: 28,
+        borderBottomRightRadius: 28,
+      }}
+    >
+      <StatusBar style="light" />
+      <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
+            <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradientId})`} />
+      </Svg>
+      <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
+      <View style={{ position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.06)", bottom: -40, left: -30 }} />
+      <PawPrint size={20} color="#fff" style={{ position: "absolute", bottom: 18 + overlap, right: 36, opacity: 0.18, transform: [{ rotate: "20deg" }] }} />
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {onBack && (
+          <TouchableOpacity
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            hitSlop={8}
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}
+          >
+            <ArrowLeft size={20} color="#fff" strokeWidth={2.5} />
+          </TouchableOpacity>
+        )}
+        <View style={{ flex: 1 }}>
+          {eyebrow ? (
+            <Text style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontFamily: FONT_BOLD, letterSpacing: 0.8, textTransform: "uppercase" }}>
+              {eyebrow}
+            </Text>
+          ) : null}
+          <Text style={{ fontSize: 22, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.3 }} numberOfLines={1}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 2 }} numberOfLines={2}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {right}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+/** Translucent round icon button for use on a HeroHeader. */
+export function HeroIconButton({ icon: Icon, label, onPress, badge }: { icon: IconType; label: string; onPress: () => void; badge?: boolean }) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}
+    >
+      <Icon size={20} color="#fff" strokeWidth={2} />
+      {badge && (
+        <View
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 7,
+            width: 10,
+            height: 10,
+            borderRadius: 5,
+            backgroundColor: T.error,
+            borderWidth: 1.5,
+            borderColor: T.white,
+          }}
+        />
+      )}
+    </TouchableOpacity>
+  );
+}
+
 export function Header({
   title,
   subtitle,

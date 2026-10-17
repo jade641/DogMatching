@@ -1,10 +1,13 @@
-import { Check, ChevronDown, Eye, FileText, MapPin, Send, Stethoscope, Syringe, X } from "lucide-react-native";
+import { Check, ChevronDown, Eye, FileText, MapPin, Send, Star, Stethoscope, Syringe, X } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { capitalize, DOC_TYPES, FONT, FONT_BOLD, FONT_MEDIUM, formatAge, shadow, T } from "../constants/theme";
 import { BREEDS, canonicalBreed, TEMPERAMENT_OPTIONS } from "../services/compatibility";
 import type { Dog, RankedMatch } from "../types";
 import { Avatar, Chip, DogImage, ScoreBar, Tag, VeriBadge } from "./ui";
+
+/** Photo height shared by every match card so all dog photos line up. */
+export const MATCH_PHOTO_HEIGHT = 190;
 
 /* ── Breed autocomplete ─────────────────────────────────────────── */
 export function BreedInput({
@@ -396,13 +399,31 @@ export function MatchCard({
   const { dog, compatibility, reasons } = match;
   return (
     <View style={{ width, backgroundColor: T.white, borderRadius: 18, overflow: "hidden", ...shadow, elevation: 3 }}>
-      {banner ? (
-        <View style={{ paddingVertical: 6, backgroundColor: T.secondary, alignItems: "center" }}>
-          <Text style={{ fontSize: 12, color: "#fff", fontFamily: FONT_BOLD }}>{banner}</Text>
-        </View>
-      ) : null}
       <TouchableOpacity activeOpacity={0.9} onPress={onView}>
-        <DogImage uri={dog.img} width="100%" height={170} radius={0} />
+        <DogImage uri={dog.img} width="100%" height={MATCH_PHOTO_HEIGHT} radius={0} />
+        {/* A corner badge (not a strip) so every card shows the same, uncovered photo area. */}
+        {banner ? (
+          <View
+            style={{
+              position: "absolute",
+              right: 12,
+              top: 12,
+              maxWidth: "58%",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 5,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 999,
+              backgroundColor: T.secondary,
+            }}
+          >
+            <Star size={12} color="#fff" fill="#fff" />
+            <Text style={{ fontSize: 12, color: "#fff", fontFamily: FONT_BOLD, flexShrink: 1 }} numberOfLines={1}>
+              {banner}
+            </Text>
+          </View>
+        ) : null}
         <View
           style={{
             position: "absolute",

@@ -2,7 +2,7 @@ import { ChevronRight, Eye, Send, Sparkles } from "lucide-react-native";
 import { Text, TouchableOpacity, View } from "react-native";
 import { capitalize, FONT, FONT_BOLD, formatAge, shadow, T } from "../constants/theme";
 import type { RankedMatch } from "../types";
-import { OwnerLine, TemperamentTags, TrustIndicators } from "./DogWidgets";
+import { MATCH_PHOTO_HEIGHT, OwnerLine, TemperamentTags, TrustIndicators } from "./DogWidgets";
 import { Btn, DogImage, ScoreBar, Tag, VeriBadge } from "./ui";
 
 function CriterionBar({ label, weight, score }: { label: string; weight: string; score: number }) {
@@ -61,7 +61,7 @@ function FloatingMatchCard({
       }}
     >
       <View>
-        <DogImage uri={dog.img} width="100%" height={190} radius={0} />
+        <DogImage uri={dog.img} width="100%" height={MATCH_PHOTO_HEIGHT} radius={0} />
         <View
           style={{
             position: "absolute",
