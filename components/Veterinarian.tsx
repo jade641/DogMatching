@@ -354,9 +354,11 @@ export function VetDashboard() {
               <Text style={{ fontSize: 12, color: "#fff", fontFamily: FONT_BOLD }}>{statusPill.label}</Text>
             </View>
             {v?.clinic ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)" }}>
+              // maxWidth + flexShrink let a long clinic name wrap to its own row and truncate there,
+              // instead of pushing the chip past the screen edge.
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", maxWidth: "100%" }}>
                 <Building2 size={14} color="#fff" strokeWidth={2.25} />
-                <Text style={{ fontSize: 12, color: "#fff", fontFamily: FONT_BOLD }} numberOfLines={1}>
+                <Text style={{ fontSize: 12, color: "#fff", fontFamily: FONT_BOLD, flexShrink: 1 }} numberOfLines={1}>
                   {v.clinic}
                 </Text>
               </View>

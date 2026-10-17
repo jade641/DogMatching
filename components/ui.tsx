@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { AlertCircle, ArrowLeft, Eye, EyeOff, PawPrint, Star } from "lucide-react-native";
-import { type ComponentType, type ReactNode, useId, useState } from "react";
+import { type ComponentType, type ReactNode, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,7 +16,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { FONT, FONT_BOLD, FONT_MEDIUM, initials, shadow, T, type Tone } from "../constants/theme";
 
 type IconType = ComponentType<{ size?: number; color?: string; strokeWidth?: number; fill?: string }>;
@@ -70,7 +70,6 @@ export function HeroHeader({
   children?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const gradientId = `hero${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
     <View
       style={{
@@ -83,15 +82,14 @@ export function HeroHeader({
       }}
     >
       <StatusBar style="light" />
-      <Svg style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} width="100%" height="100%">
-        <Defs>
-          <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={T.primary} stopOpacity="1" />
-            <Stop offset="1" stopColor={T.primaryDark} stopOpacity="1" />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${gradientId})`} />
-      </Svg>
+      {/* A native view pinned to all four edges resizes with the header. The previous <Svg
+          width/height="100%"> didn't track the header's size on Android, leaving it half-painted. */}
+      <LinearGradient
+        colors={[T.primary, T.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+      />
       <View style={{ position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.08)", top: -60, right: -50 }} />
       <View style={{ position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.06)", bottom: -40, left: -30 }} />
       <PawPrint size={20} color="#fff" style={{ position: "absolute", bottom: 18 + overlap, right: 36, opacity: 0.18, transform: [{ rotate: "20deg" }] }} />
