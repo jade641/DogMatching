@@ -212,8 +212,29 @@ export async function changePassword(newPassword: string) {
 
 export const socialLoginEnabled = process.env.EXPO_PUBLIC_ENABLE_SOCIAL_LOGIN === "true";
 
+async function isProviderEnabled(provider: "google" | "facebook"): Promise<boolean> {
+  try {
+    const res = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "" },
+    });
+    const settings = (await res.json()) as { external?: Record<string, boolean> };
+    return settings.external?.[provider] !== false;
+  } catch {
+    return true; // Can't tell (e.g. offline): let the OAuth flow report its own error.
+  }
+}
+
 /** Google / Facebook sign-in through Supabase OAuth (requires providers to be enabled). */
 export async function signInWithProvider(provider: "google" | "facebook"): Promise<boolean> {
+  // A disabled provider only fails inside the browser (a raw JSON error page),
+  // so check first and explain it in the app instead.
+  if (!(await isProviderEnabled(provider))) {
+    fail(
+      `${provider === "google" ? "Google" : "Facebook"} sign-in isn't available yet. Please use your email and password. ` +
+        "(Admins: enable the provider in Supabase → Authentication → Sign In / Providers.)",
+    );
+  }
+
   if (Platform.OS === "web") {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -223,7 +244,11 @@ export async function signInWithProvider(provider: "google" | "facebook"): Promi
     return true;
   }
 
+  // pawmatch://auth-callback in builds, exp://<ip>:8081/--/auth-callback in Expo Go.
+  // It must match Supabase → Authentication → URL Configuration → Redirect URLs, or
+  // Supabase sends the browser to the Site URL and the app never gets the session.
   const redirectTo = Linking.createURL("auth-callback");
+  if (__DEV__) console.log("[auth] OAuth redirect URL:", redirectTo);
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: { redirectTo, skipBrowserRedirect: true },
@@ -268,7 +293,17 @@ export async function fetchSession(): Promise<Session | null> {
     supabase.from("verifiers").select("*").eq("user_id", uid).maybeSingle(),
   ]);
   if (user.error) fail(user.error);
-  if (!user.data) fail("Your PawMatch profile could not be found. Please contact support.");
+  if (!user.data) {
+    // getSession() only reads the session stored on the device. If the account was
+    // deleted server-side (e.g. a database reset), drop that stale session and treat
+    // the user as signed out instead of failing boot on every launch.
+    const { error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      return null;
+    }
+    fail("Your PawMatch profile could not be found. Please contact support.");
+  }
 
   return {
     user: user.data,

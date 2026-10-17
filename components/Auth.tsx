@@ -54,7 +54,7 @@ import {
 import { homeScreenFor, useApp } from "../contexts/AppContext";
 import * as api from "../services/api";
 import type { VerifierRole } from "../types";
-import { Btn, Chip, ErrorView, Field, showMessage } from "./ui";
+import { BrandLogo, Btn, Chip, ErrorView, Field, showMessage } from "./ui";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -115,9 +115,22 @@ function TextLink({ prefix, label, onPress }: { prefix?: string; label: string; 
 
 /* ── Boot ───────────────────────────────────────────────────────── */
 export function BootScreen() {
-  const { bootError, retryBoot } = useApp();
+  const { bootError, retryBoot, signOut } = useApp();
+  const insets = useSafeAreaInsets();
+  // flexGrow keeps the content centred when it fits; when a long error or large font
+  // makes it taller than the screen, it scrolls instead of overflowing both edges.
   return (
-    <View style={{ flex: 1, backgroundColor: T.primary, alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: T.primary }}
+      contentContainerStyle={{
+        flexGrow: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        paddingTop: insets.top + 24,
+        paddingBottom: insets.bottom + 24,
+      }}
+    >
       <View
         style={{
           width: 110,
@@ -129,22 +142,28 @@ export function BootScreen() {
           marginBottom: 20,
         }}
       >
-        <Heart size={54} color="#fff" strokeWidth={2} />
+        <BrandLogo size={64} />
       </View>
-      <Text style={{ fontSize: 32, color: "#fff", fontFamily: FONT_BOLD }}>PawMatch</Text>
-      <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 6 }}>
+      <Text style={{ fontSize: 32, color: "#fff", fontFamily: FONT_BOLD, textAlign: "center" }}>PawMatch</Text>
+      <Text style={{ fontSize: 15, color: "rgba(255,255,255,0.85)", fontFamily: FONT, marginTop: 6, textAlign: "center" }}>
         Verified. Local. Trusted.
       </Text>
       <View style={{ marginTop: 40, minHeight: 120, alignSelf: "stretch" }}>
         {bootError ? (
-          <View style={{ backgroundColor: T.white, borderRadius: 16 }}>
-            <ErrorView message={bootError} onRetry={retryBoot} />
-          </View>
+          <>
+            <View style={{ backgroundColor: T.white, borderRadius: 16 }}>
+              <ErrorView message={bootError} onRetry={retryBoot} />
+            </View>
+            {/* Retrying can't fix a broken account, so always leave a way out. */}
+            <TouchableOpacity onPress={signOut} accessibilityRole="button" style={{ alignSelf: "center", paddingVertical: 14, paddingHorizontal: 20, marginTop: 8 }}>
+              <Text style={{ fontSize: 14, color: "#fff", fontFamily: FONT_BOLD }}>Sign out</Text>
+            </TouchableOpacity>
+          </>
         ) : (
           <ActivityIndicator color="#fff" size="large" />
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -363,7 +382,7 @@ export function Landing() {
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: T.primary, alignItems: "center", justifyContent: "center" }}>
-            <PawPrint size={18} color="#fff" strokeWidth={2.25} />
+            <BrandLogo size={22} />
           </View>
           <Text style={{ fontSize: 19, color: T.dark, fontFamily: FONT_BOLD, letterSpacing: -0.3 }}>PawMatch</Text>
         </View>
@@ -474,7 +493,7 @@ function AuthShell({ title, subtitle, onBack, children, footer }: {
             </TouchableOpacity>
           ) : (
             <View style={{ width: 60, height: 60, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center", marginBottom: 22 }}>
-              <PawPrint size={30} color="#fff" strokeWidth={2.25} />
+              <BrandLogo size={38} />
             </View>
           )}
           <Text style={{ fontSize: 30, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.5 }}>{title}</Text>

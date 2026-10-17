@@ -415,6 +415,18 @@ export function Avatar({ name, size = 40, color = T.primary }: { name: string; s
   );
 }
 
+/** PawMatch paw mark — same artwork as the app icon and splash screen. */
+export function BrandLogo({ size }: { size: number }) {
+  return (
+    <Image
+      source={require("../assets/images/logo.png")}
+      style={{ width: size, height: size }}
+      resizeMode="contain"
+      accessibilityIgnoresInvertColors
+    />
+  );
+}
+
 export function DogImage({
   uri,
   width,

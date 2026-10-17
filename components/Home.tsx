@@ -29,7 +29,7 @@ import { TEMPERAMENT_OPTIONS } from "../services/compatibility";
 import type { RankedMatch, Size } from "../types";
 import { BreedInput, ColorCombobox, MatchCard, MyDogSelector } from "./DogWidgets";
 import { FloatingMatchResults } from "./FloatingMatchResults";
-import { Avatar, Btn, Card, Chip, EmptyState, ErrorView, Header, Loading, SectionTitle } from "./ui";
+import { Avatar, BrandLogo, Btn, Card, Chip, EmptyState, ErrorView, Header, Loading, SectionTitle } from "./ui";
 
 function NoDogPrompt() {
   const { navigate } = useApp();
@@ -171,7 +171,7 @@ export function HomeScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}>
-                <PawPrint size={18} color="#fff" strokeWidth={2.25} />
+                <BrandLogo size={22} />
               </View>
               <Text style={{ fontSize: 19, color: "#fff", fontFamily: FONT_BOLD, letterSpacing: -0.3 }}>PawMatch</Text>
             </View>
